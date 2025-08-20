@@ -1,0 +1,9 @@
+{
+  "recommendations": [
+    "esbenp.prettier-vscode",
+    "yoavbls.pretty-ts-errors",
+    "dbaeumer.vscode-eslint",
+    "usernamehw.errorlens",
+    "prisma.prisma"
+  ]
+}

@@ -1,0 +1,71 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AuthenticationStatus {
+  SUCCESS
+  USER_NOT_EXISTS
+  INCORRECT_PASSWORD
+  RECOVER_PASSWORD
+  INVALID_TOKEN
+  BLOCKED
+}
+
+enum UserRole {
+  ADMIN
+  DEFAULT
+}
+
+model AuthenticationAudit {
+  id         String               @id @default(uuid(7))
+  ipAddress  String?              @map("ip_address")
+  remotePort String?              @map("remote_port")
+  userAgent  String?              @map("user_agent")
+  origin     String?
+  status     AuthenticationStatus
+  userId     Int?                 @map("user_id")
+  user       User?                @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt], name: "idx_auth_audit_user_date")
+  @@map("authentication_audit")
+}
+
+model User {
+  id            Int       @id @default(autoincrement())
+  publicId      String    @unique @default(uuid(7)) @map("public_id")
+  name          String
+  username      String    @unique
+  email         String    @unique
+  cpf           String    @unique
+  passwordHash  String    @map("password_hash")
+  loginAttempts Int       @default(0) @map("login_attempts")
+  lastLogin     DateTime? @map("last_login")
+  role          UserRole  @default(DEFAULT)
+
+  token          String?    @unique
+  tokenExpiresAt DateTime?  @map("token_expires_at")
+
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  passwordChangedAt DateTime? @map("password_changed_at")
+
+  authenticationAudits AuthenticationAudit[]
+
+  @@index([name], name: "idx_user_name")
+  @@index([token], name: "idx_user_token")
+  @@map("users")
+}
+

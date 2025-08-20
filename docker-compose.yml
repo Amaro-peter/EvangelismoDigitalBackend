@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: bitnami/postgresql:17.4.0-debian-12-r16
+    environment:
+      - POSTGRESQL_USERNAME=${POSTGRES_USER}
+      - POSTGRESQL_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRESQL_DATABASE=${POSTGRES_DB}
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/bitnami/postgresql
+    networks:
+      - app-network
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', '${POSTGRES_USER}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # redis:
+  #   image: bitnami/redis:7.4.2-debian-12-r9
+  #   environment:
+  #     - REDIS_PASSWORD=redis123
+  #   ports:
+  #     - '6379:6379'
+  #   volumes:
+  #     - redis_data:/bitnami/redis
+  #   networks:
+  #     - app-network
+  #   healthcheck:
+  #     test: ['CMD', 'redis-cli', 'ping']
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+  # app:
+  #   build: .
+  #   ports:
+  #     - '${APP_PORT}:3000'
+  #   env_file:
+  #     - .env
+  #   volumes:
+  #     - .:/app
+  #     - /app/node_modules
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - app-network
+  #   command: ${COMMAND}
+
+volumes:
+  postgres_data:
+  # redis_data:
+
+networks:
+  app-network:
+    driver: bridge

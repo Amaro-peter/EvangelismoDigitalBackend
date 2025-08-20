@@ -1,0 +1,104 @@
+### Variables 
+@apiurl = http://localhost:3000
+@accessToken = {{authenticate_admin.response.body.token}}
+
+@userId =
+
+@refreshToken = 
+@passwordToken = 
+
+### POST create a new user
+POST {{apiurl}}/users/register HTTP/1.1
+Content-Type: application/json
+
+{
+  "name": "Fulano de Tal",
+  "username": "fulano123",
+  "email": "ayrtonsurica@gmail.com",
+  "cpf": "18949082799",
+  "password": "12345678Aa@"
+}
+
+### POST Authenticate Admin
+# @name authenticate_admin
+POST {{apiurl}}/users/sessions HTTP/1.1
+Content-Type: application/json
+
+{
+  "login": "admin@example.com",
+  "password": "ybp_whf3wxn2xdr6MTE"
+}
+
+### POST forgot password
+POST {{apiurl}}/users/forgot-password HTTP/1.1
+Content-Type: application/json
+
+{
+  "login": "ayrtonsurica@gmail.com"
+}
+
+### PATCH reset password
+PATCH {{apiurl}}/users/reset-password HTTP/1.1
+Content-Type: application/json
+
+{
+  "password": "789456123Aa@",
+  "token": "f62db3b57794fc2d5c13033aadf133b7f71cbb1adfda994ab81cacf55d8b42f8"
+}
+
+### GET health check
+GET {{apiurl}}/health HTTP/1.1
+
+### GET user profile
+GET {{apiurl}}/users/0198bad0-dfd3-7371-a4f3-c764d7df2cce HTTP/1.1
+Authorization: Bearer {{accessToken}}
+
+### GET list users
+GET {{apiurl}}/users HTTP/1.1
+Authorization: Bearer {{accessToken}}
+
+### PATCH update user
+PATCH {{apiurl}}/users/0198bad0-dfd3-7371-a4f3-c764d7df2cce HTTP/1.1
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "name": "Novo Nome",
+  "email": "novoemail@gmail.com",
+  "username": "novonome123",
+  "password": "NovaSenha123@"
+}
+
+### DELETE user
+DELETE {{apiurl}}/users/0198badf-7fe3-7701-a48c-107942e04886 HTTP/1.1
+Authorization: Bearer {{accessToken}}
+
+### POST create admin user
+POST {{apiurl}}/users/register/admin HTTP/1.1
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "name": "Admin User",
+  "username": "adminuser",
+  "email": "adminuser@example.com",
+  "cpf": "050.468.600-31",
+  "password": "AdminSenha123@"
+}
+
+### PATCH update own user
+PATCH {{apiurl}}/users/me HTTP/1.1
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "name": "Novo Nome"
+}
+
+### GET own user profile
+GET {{apiurl}}/users/me HTTP/1.1
+Authorization: Bearer {{accessToken}}
+
+### DELETE own user
+DELETE {{apiurl}}/users/me HTTP/1.1
+Authorization: Bearer {{accessToken}}

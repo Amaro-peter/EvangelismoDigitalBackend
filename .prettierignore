@@ -1,0 +1,4 @@
+**/.git
+src/generated/**
+ecosystem.config.js
+jest.config.js
