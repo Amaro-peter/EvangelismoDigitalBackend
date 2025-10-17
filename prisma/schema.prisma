@@ -69,6 +69,18 @@ model User {
   @@map("users")
 }
 
+model FormSubmission {
+  id               Int      @id @default(autoincrement())
+  publicId         String   @unique @default(uuid(7)) @map("public_id")
+  name             String
+  email            String
+  decisaoPorCristo Boolean
+  createdAt        DateTime @default(now()) @map("created_at")
+  location         String?  @map("location")
+
+  @@map("form_submissions")
+}
+
 model Church {
   id      Int                                   @id @default(autoincrement())
   name    String
