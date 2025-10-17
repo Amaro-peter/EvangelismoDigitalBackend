@@ -55,8 +55,8 @@ model User {
   lastLogin     DateTime? @map("last_login")
   role          UserRole  @default(DEFAULT)
 
-  token          String?    @unique
-  tokenExpiresAt DateTime?  @map("token_expires_at")
+  token          String?   @unique
+  tokenExpiresAt DateTime? @map("token_expires_at")
 
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
@@ -69,3 +69,13 @@ model User {
   @@map("users")
 }
 
+model Church {
+  id      Int                                   @id @default(autoincrement())
+  name    String
+  address String?
+  lat     Float
+  lon     Float
+  geog    Unsupported("geography(Point,4326)")?
+
+  @@map("churches")
+}

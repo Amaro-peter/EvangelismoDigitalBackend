@@ -6,6 +6,7 @@
   "author": "",
   "license": "ISC",
   "scripts": {
+    "dev": "tsx watch --env-file=.env --no-deprecation src/server.ts",
     "build": "tsup src --minify",
     "start:dev": "tsx watch --env-file=.env --no-deprecation src/server.ts",
     "start:prod": "node --env-file=.env dist/server.js",
