@@ -20,6 +20,7 @@ export const messages = {
     unauthorized: 'Não autorizado!',
     invalidToken: 'Token inválido ou expirado!',
     passwordChangeRequired: 'É necessário alterar a senha antes de acessar o sistema!',
+    formSubmissionFailed: 'Falha ao enviar o formulário.',
   },
   info: {
     passwordResetGeneric: 'Se o usuário existir, você receberá um e-mail com instruções para redefinir a senha.',

@@ -70,24 +70,15 @@ model User {
 }
 
 model FormSubmission {
-  id               Int      @id @default(autoincrement())
-  publicId         String   @unique @default(uuid(7)) @map("public_id")
+  id               String   @id @default(uuid())
+  publicId         String   @unique @default(uuid())
   name             String
+  lastName         String
   email            String
   decisaoPorCristo Boolean
-  createdAt        DateTime @default(now()) @map("created_at")
-  location         String?  @map("location")
+  location         String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   @@map("form_submissions")
-}
-
-model Church {
-  id      Int                                   @id @default(autoincrement())
-  name    String
-  address String?
-  lat     Float
-  lon     Float
-  geog    Unsupported("geography(Point,4326)")?
-
-  @@map("churches")
 }

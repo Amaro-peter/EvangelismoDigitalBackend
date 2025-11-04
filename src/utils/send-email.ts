@@ -13,6 +13,15 @@ const transporter = nodemailer.createTransport({
   },
 })
 
+transporter
+  .verify()
+  .then(() => {
+    logger.info('SMTP transporter verified successfully')
+  })
+  .catch((error) => {
+    logger.error({ error }, 'SMTP transporter verification failed')
+  })
+
 interface SendEmailRequest {
   to: string
   subject: string
