@@ -3,7 +3,7 @@ version: '3'
 services:
   db:
     image: bitnami/postgresql:latest
-    container_name: database_social_media_project
+    container_name: database_evangelismo_digital_project
     restart: always
     ports:
       - '5432:5432'
@@ -22,7 +22,7 @@ services:
   
   app:
     build: .
-    container_name: node_app
+    container_name: evangelismo_digital_backend
     ports:
       - '3333:3333'
       - '5555:5555'
