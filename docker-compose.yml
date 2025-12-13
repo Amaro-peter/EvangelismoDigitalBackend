@@ -1,43 +1,132 @@
-version: '3'
+version: '3.8'
 
 services:
   db:
-    image: bitnami/postgresql:latest
-    container_name: database_evangelismo_digital_project
-    restart: always
+    image: postgres:16-alpine
+    container_name: db_evangelismo_dev
+    restart: unless-stopped
     ports:
       - '5432:5432'
     environment:
-      - POSTGRESQL_USERNAME=${POSTGRES_USER}
-      - POSTGRESQL_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRESQL_DATABASE=${POSTGRES_DB}
-      - POSTGRESQL_CREATE_DATABASE=${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      - pgdata:/bitnami/postgresql
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "${POSTGRES_DB}"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 30s
       timeout: 5s
       retries: 5
-  
+      start_period: 10s
+    networks:
+      - evangelismo-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis_evangelismo_dev
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - evangelismo-network
+
   app:
-    build: .
-    container_name: evangelismo_digital_backend
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: api_evangelismo_dev
+    restart: unless-stopped
     ports:
       - '3333:3333'
       - '5555:5555'
     volumes:
       - .:/app
       - /app/node_modules
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      REDIS_HOST: redis
+      POSTGRES_HOST: db
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      bash -c "
+      wait-for-it.sh db:5432 --timeout=60 --strict -- echo '✅ Database ready!' &&
+      npx prisma migrate deploy &&
+      npx prisma db seed &&
+      echo '🚀 Starting API server...' &&
+      npm run start:dev
+      "
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3333/health"]
+      interval: 120s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - evangelismo-network
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: worker_evangelismo_dev
+    restart: unless-stopped
+    volumes:
+      - .:/app
+      - /app/node_modules
+    env_file:
+      - .env
     environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - NODE_ENV=${NODE_ENV}
-      - JWT_SECRET=${JWT_SECRET}
-      - APP_PORT=${APP_PORT}
-    command: ["bash", "/usr/local/bin/wait-for-it.sh", "db:5432", "--", "sh", "-c", "npx prisma migrate dev --name auto_migration --skip-generate || npx prisma migrate deploy && npx prisma db seed && npm run start:dev"]
+      NODE_ENV: development
+      REDIS_HOST: redis
+      POSTGRES_HOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      app:
+        condition: service_healthy
+    command: >
+      bash -c "
+      wait-for-it.sh db:5432 --timeout=60 --strict -- 
+      wait-for-it.sh redis:6379 --timeout=60 --strict --
+      echo '✅ Services ready!' &&
+      echo '🏗️  Building application...' &&
+      npm run build &&
+      echo '🔧 Starting worker...' &&
+      npm run start:worker
+      "
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "node.*worker"]
+      interval: 120s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - evangelismo-network
 
 volumes:
   pgdata:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  evangelismo-network:
+    driver: bridge

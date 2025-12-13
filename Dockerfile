@@ -1,31 +1,32 @@
 FROM node:20-alpine
 
-# Define o diretório de trabalho
 WORKDIR /app
 
-# Instala dependências do sistema necessárias
-RUN apk add --no-cache bash postgresql-client openssl
+# Install system dependencies
+RUN apk add --no-cache bash openssl libc6-compat wget postgresql-client
 
-# Copia os arquivos de dependência
+# Copy package files and prisma schema
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Instala TODAS as dependências
+# Install dependencies
 RUN npm install
 
-# Gera o cliente do Prisma
+# Generate Prisma client
 RUN npx prisma generate
 
-# Copia o restante do código
+# Copy application code
 COPY . .
 
-# Copia e torna executável o script wait-for-it
+# BUILD TypeScript to dist/
+RUN npm run build
+
+# Copy wait-for-it script
 COPY wait-for-it.sh /usr/local/bin/wait-for-it.sh
 RUN chmod +x /usr/local/bin/wait-for-it.sh
 
-# Expõe as portas
-EXPOSE 3333
-EXPOSE 5555
+# Expose ports
+EXPOSE 3333 5555
 
-# Comando para iniciar a aplicação
-CMD ["bash", "/usr/local/bin/wait-for-it.sh", "db:5432", "--", "sh", "-c", "npx prisma migrate dev --name auto_migration --skip-generate || npx prisma migrate deploy && npx prisma db seed && npm run start:dev"]
+# Default command
+CMD ["npm", "run", "start:dev"]
