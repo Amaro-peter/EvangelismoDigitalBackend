@@ -1,11 +1,11 @@
-export function decisionInternalHtmlTemplate(name: string, email: string, location?: string) {
+export function decisionInternalHtmlTemplate(name: string, lastName: string, email: string, location?: string) {
   return `
             <p>
                 Nova decisão por Cristo:
             </p>
             <ul>
                 <li>
-                    Nome: ${name}
+                    Nome: ${name} ${lastName}
                 </li>
                 <li>
                     Email: ${email}

@@ -5,10 +5,11 @@ import { Queue } from "bullmq"
 export const MAIL_QUEUE_NAME = 'mail-queue'
 
 export interface MailJobData {
-    to: string
-    subject: string
-    html: string
-    context?: Record<string, unknown>
+  to: string | undefined
+  subject: string
+  message: string
+  html: string
+  context?: Record<string, unknown>
 }
 
 export const mailQueue = new Queue<MailJobData>(MAIL_QUEUE_NAME, {

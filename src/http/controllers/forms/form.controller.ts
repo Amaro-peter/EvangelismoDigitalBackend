@@ -49,7 +49,7 @@ export async function formSubmission(request: FastifyRequest, reply: FastifyRepl
         to: process.env.ADMIN_EMAIL,
         subject: decisionInternalSubjectText(),
         message: decisionInternalTextTemplate(name, email, location),
-        html: decisionInternalHtmlTemplate(name, email, location),
+        html: decisionInternalHtmlTemplate(name, lastName, email, location),
         context: { type: 'decision-for-Christ', recipient: 'internal' },
       })
     } else {
@@ -65,7 +65,7 @@ export async function formSubmission(request: FastifyRequest, reply: FastifyRepl
         to: process.env.ADMIN_EMAIL,
         subject: contactInternalSubjectTextTemplate(),
         message: contactInternalTextTemplate(name, email),
-        html: contactInternalHtmlTemplate(name, email),
+        html: contactInternalHtmlTemplate(name, lastName, email),
         context: { type: 'contact', recipient: 'internal' },
       })
     }
