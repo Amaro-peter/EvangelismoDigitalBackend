@@ -15,7 +15,8 @@ WORKDIR /app
 # ------------------------------------------------------------------------------
 FROM base AS deps
 COPY package.json package-lock.json ./
-RUN npm ci
+# Install all dependencies including optional ones for the correct platform
+RUN npm ci --include=optional
 
 # ------------------------------------------------------------------------------
 # Stage 3: Development
@@ -32,12 +33,14 @@ CMD ["npm", "run", "dev"]
 # Stage 4: Builder (Production build)
 # ------------------------------------------------------------------------------
 FROM base AS builder
-ENV NODE_ENV=production
-COPY --from=deps /app/node_modules ./node_modules
+COPY package.json package-lock.json ./
+# Install dependencies fresh in builder to ensure correct platform binaries
+RUN npm ci --include=optional --loglevel verbose
 COPY . .
 RUN npx prisma generate
 RUN npm run build
-RUN npm ci --omit=dev && npm cache clean --force
+# Reinstall production-only dependencies
+RUN rm -rf node_modules && npm ci --omit=dev --include=optional && npm cache clean --force
 
 # ------------------------------------------------------------------------------
 # Stage 5: Production
@@ -51,10 +54,9 @@ COPY --from=builder /app/package.json ./
 COPY --from=builder /app/prisma ./prisma
 
 # Add strict user for security
-RUN addgroup -S nodejs && adduser -S nodejs -G nodejs
+RUN addgroup --system nodejs && adduser --system --ingroup nodejs nodejs
 USER nodejs
 
 EXPOSE 3333
 
-# CHANGED: Execute node directly, relying on Docker to inject env vars
 CMD ["node", "dist/server.js"]
