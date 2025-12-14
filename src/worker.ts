@@ -1,4 +1,3 @@
-import 'dotenv/config'
 import { logger } from '@lib/logger'
 import { startMailWorker } from '@lib/queue/workers/mail-worker'
 import { Worker } from 'bullmq'
