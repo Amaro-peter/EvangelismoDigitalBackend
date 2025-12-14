@@ -1,16 +1,20 @@
 import { formsSchema } from '@http/schemas/forms/forms-schema'
 import { logger } from '@lib/logger'
+import { mailQueue } from '@lib/queue/mail-queue'
 import { contactInternalHtmlTemplate } from '@templates/contact-internal/contact-internal-html'
+import { contactInternalSubjectTextTemplate } from '@templates/contact-internal/contact-internal-subject-text'
 import { contactInternalTextTemplate } from '@templates/contact-internal/contact-internal-text'
 import { contactUserHtmlTemplate } from '@templates/contact-user/contact-user-html'
+import { contactUserSubjectTextTemplate } from '@templates/contact-user/contact-user-subject-text'
 import { contactUserTextTemplate } from '@templates/contact-user/contact-user-text'
 import { decisionInternalHtmlTemplate } from '@templates/decision-internal/decision-internal-html'
+import { decisionInternalSubjectText } from '@templates/decision-internal/decision-internal-subject-text'
 import { decisionInternalTextTemplate } from '@templates/decision-internal/decision-internal-text'
 import { decisionUserHtmlTemplate } from '@templates/decision-user/decision-user-html'
+import { decisionUserSubjectText } from '@templates/decision-user/decision-user-subject-text'
 import { decisionUserTextTemplate } from '@templates/decision-user/decision-user-text'
 import { FormSubmissionError } from '@use-cases/errors/form-submission-error'
 import { makeFormSubmissionUseCase } from '@use-cases/factories/make-form-submission-use-case'
-import { makeSendEmailUseCase } from '@use-cases/factories/make-send-email-use-case'
 import { FastifyReply, FastifyRequest } from 'fastify'
 
 export async function formSubmission(request: FastifyRequest, reply: FastifyReply) {
@@ -19,6 +23,7 @@ export async function formSubmission(request: FastifyRequest, reply: FastifyRepl
 
     const formSubmissionUseCase = makeFormSubmissionUseCase()
 
+    // 1. Persistência no Banco de Dados (Operação Rápida)
     const { formSubmission } = await formSubmissionUseCase.execute({
       name,
       lastName,
@@ -29,48 +34,43 @@ export async function formSubmission(request: FastifyRequest, reply: FastifyRepl
 
     logger.info({ formSubmissionId: formSubmission.publicId }, 'Submissão de formulário enviada com sucesso!')
 
-    reply.status(201).send({ formSubmission })
-
-    const sendEmailUseCase = makeSendEmailUseCase()
+    // 2. Enfileiramento de E-mails (Producer)
 
     if (decisaoPorCristo) {
-      void sendEmailUseCase
-        .execute({
-          to: email,
-          subject: 'Parabéns pela sua decisão!',
-          message: decisionUserTextTemplate(name),
-          html: decisionUserHtmlTemplate(name),
-        })
-        .catch((err) => logger.error({ err, to: email }, 'Erro ao enviar e-mail de decisão por Cristo'))
+      await mailQueue.add('decision-for-Christ-user-email', {
+        to: email,
+        subject: decisionUserSubjectText(),
+        message: decisionUserTextTemplate(name),
+        html: decisionUserHtmlTemplate(name),
+        context: { type: 'decision-for-Christ', recipient: 'user' },
+      })
 
-      void sendEmailUseCase
-        .execute({
-          to: 'pedro.amaro.fe@gmail.com',
-          subject: 'Nova decisão por Cristo registrada',
-          message: decisionInternalTextTemplate(name, email, location),
-          html: decisionInternalHtmlTemplate(name, email, location),
-        })
-        .catch((err) => logger.error({ err, name, email }, 'Erro ao notificar Time interno sobre decisão por Cristo'))
+      await mailQueue.add('decision-for-Christ-internal-email', {
+        to: process.env.ADMIN_EMAIL,
+        subject: decisionInternalSubjectText(),
+        message: decisionInternalTextTemplate(name, email, location),
+        html: decisionInternalHtmlTemplate(name, lastName, email, location),
+        context: { type: 'decision-for-Christ', recipient: 'internal' },
+      })
     } else {
-      void sendEmailUseCase
-        .execute({
-          to: email,
-          subject: 'Obrigado pelo seu contato',
-          message: contactUserTextTemplate(name),
-          html: contactUserHtmlTemplate(name),
-        })
-        .catch((err) => logger.error({ err, to: email }, 'Erro ao enviar e-mail de agradecimento'))
+      await mailQueue.add('contact-user-email', {
+        to: email,
+        subject: contactUserSubjectTextTemplate(),
+        message: contactUserTextTemplate(name),
+        html: contactUserHtmlTemplate(name),
+        context: { type: 'contact', recipient: 'user' },
+      })
 
-      // Notification to Pedro about the submitted form
-      void sendEmailUseCase
-        .execute({
-          to: 'pedro.amaro.fe@gmail.com',
-          subject: 'Novo formulário enviado',
-          message: contactInternalTextTemplate(name, email),
-          html: contactInternalHtmlTemplate(name, email),
-        })
-        .catch((err) => logger.error({ err, name, email }, 'Erro ao notificar Time interno sobre formulário'))
+      await mailQueue.add('contact-internal-email', {
+        to: process.env.ADMIN_EMAIL,
+        subject: contactInternalSubjectTextTemplate(),
+        message: contactInternalTextTemplate(name, email),
+        html: contactInternalHtmlTemplate(name, lastName, email),
+        context: { type: 'contact', recipient: 'internal' },
+      })
     }
+
+    reply.status(201).send({ formSubmission })
   } catch (error) {
     if (error instanceof FormSubmissionError) {
       return reply.status(500).send({ message: error.message })

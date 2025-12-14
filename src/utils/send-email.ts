@@ -1,26 +1,38 @@
 import { env } from '@env/index'
 import { logger } from '@lib/logger'
-import nodemailer, { SentMessageInfo } from 'nodemailer'
+import nodemailer, { SentMessageInfo, Transporter } from 'nodemailer'
 import { Attachment } from 'nodemailer/lib/mailer'
 
-const transporter = nodemailer.createTransport({
-  host: env.SMTP_HOST,
-  port: env.SMTP_PORT,
-  secure: env.SMTP_SECURE,
-  auth: {
-    user: env.SMTP_EMAIL,
-    pass: env.SMTP_PASSWORD,
-  },
-})
+let transporter: Transporter | null = null
+let isVerified = false
 
-transporter
-  .verify()
-  .then(() => {
-    logger.info('SMTP transporter verified successfully')
-  })
-  .catch((error) => {
-    logger.error({ error }, 'SMTP transporter verification failed')
-  })
+async function getTransporter(): Promise<Transporter> {
+  if (!transporter) {
+    transporter = nodemailer.createTransport({
+      host: env.SMTP_HOST,
+      port: env.SMTP_PORT,
+      secure: env.SMTP_SECURE,
+      auth: {
+        user: env.SMTP_EMAIL,
+        pass: env.SMTP_PASSWORD,
+      },
+    })
+
+    // Verificar apenas uma vez
+    if (!isVerified) {
+      try {
+        await transporter.verify()
+        logger.info('transportador SMTP verificado com sucesso')
+        isVerified = true
+      } catch (error) {
+        logger.error({ error }, 'transportador SMTP falhou na verificação')
+        throw error
+      }
+    }
+  }
+
+  return transporter
+}
 
 interface SendEmailRequest {
   to: string
@@ -38,7 +50,9 @@ export async function sendEmail({
   attachments,
 }: SendEmailRequest): Promise<SentMessageInfo> {
   try {
-    const info = await transporter.sendMail({
+    const emailTransporter = await getTransporter()
+
+    const info = await emailTransporter.sendMail({
       from: env.SMTP_EMAIL,
       to,
       subject,
@@ -47,7 +61,7 @@ export async function sendEmail({
       ...(attachments ? { attachments } : {}),
     })
 
-    logger.info({ sentTo: to, messageId: info.messageId }, 'Message sent!')
+    logger.info({ sentTo: to, messageId: info.messageId }, 'Mensagem de e-mail enviada com sucesso')
 
     return info
   } catch (error) {

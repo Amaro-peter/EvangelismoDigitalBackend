@@ -1,12 +1,14 @@
 {
   "compilerOptions": {
     "lib": ["ES2023"],
-    "module": "node16",
     "target": "ES2022",
+    "module": "node16",
+    "moduleResolution": "node16",
     "strict": true,
     "forceConsistentCasingInFileNames": true,
     "esModuleInterop": true,
     "isolatedModules": true,
+    "resolveJsonModule": true,
     "rootDir": "./src",
     "outDir": "./dist",
     "baseUrl": "./src",
@@ -23,9 +25,10 @@
       "@tps/*": ["@types/*"],
       "@utils/*": ["utils/*"],
       "@templates/*": ["templates/*"],
-      "@schemas/*": ["http/schemas/*"],
+      "@schemas/*": ["http/schemas/*"]
     },
     "typeRoots": ["./node_modules/@types", "./src/types"],
+    "types": ["node"]
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]

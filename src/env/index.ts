@@ -8,6 +8,11 @@ const envSchema = z.object({
   // Database
   DATABASE_URL: z.url(),
 
+  // Redis
+  REDIS_HOST: z.string().default('redis'),
+  REDIS_PORT: z.coerce.number().default(6379),
+  REDIS_PASSWORD: z.string().optional(),
+
   // App
   APP_NAME: z.string().default('Backend Template Reborn'),
   APP_PORT: z.coerce.number().default(3000),
@@ -23,6 +28,9 @@ const envSchema = z.object({
   SMTP_PORT: z.coerce.number(),
   SMTP_HOST: z.string().min(1),
   SMTP_SECURE: z.enum(['true', 'false']).transform((val) => val === 'true'),
+
+  // ADMIN EMAIL
+  ADMIN_EMAIL: z.email(),
 })
 
 const _env = envSchema.safeParse(process.env)

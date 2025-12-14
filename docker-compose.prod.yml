@@ -1,0 +1,104 @@
+version: "3.8"
+
+services:
+  # ---------------------------------------------------------------------------
+  # Database & Cache (Standard Infra)
+  # ---------------------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    container_name: db_evangelismo_prod
+    restart: always
+    env_file: .env # Injects POSTGRES variables from host file
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - evangelismo-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis_evangelismo_prod
+    restart: always
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - evangelismo-network
+
+  # ---------------------------------------------------------------------------
+  # Migrator (One-off task)
+  # ---------------------------------------------------------------------------
+  migrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: migrator_evangelismo_prod
+    # Uses prisma migrate deploy (safe for prod)
+    command: npx prisma migrate deploy
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - evangelismo-network
+
+  # ---------------------------------------------------------------------------
+  # API Server
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: api_evangelismo_prod
+    restart: always
+    ports:
+      - "3333:3333"
+    env_file: .env # Reads host .env -> Injects to Container ENV
+    # CMD is inherited from Dockerfile (node dist/server.js)
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    networks:
+      - evangelismo-network
+
+  # ---------------------------------------------------------------------------
+  # Background Worker
+  # ---------------------------------------------------------------------------
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: worker_evangelismo_prod
+    restart: always
+    env_file: .env
+    # OVERRIDE: Explicitly run the worker script
+    command: node dist/worker.js
+    depends_on:
+      app:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    networks:
+      - evangelismo-network
+
+volumes:
+  pgdata:
+  redis_data:
+
+networks:
+  evangelismo-network:
+    driver: bridge
