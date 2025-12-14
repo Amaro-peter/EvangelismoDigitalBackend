@@ -1,4 +1,4 @@
-# Template Backend de Projetos - {IN} Junior 🐺
+# Backend do Projeto Evangelismo Digital
 
 ## 📋 Sumário:
 
@@ -123,6 +123,13 @@ Neste repositório está o projeto para ...
 3. Navegue para dentro do projeto clonado com o comando: `cd backend-template-reborn`.
 4. Instale as dependências do projeto ao executar no console o comando: `npm install`.
 5. Crie um arquivo `.env` na raiz do projeto copiando o conteúdo do `.env.example`. Preencha manualmente os valores que não estiverem definidos.
+
+### Se você já possui o Docker e deseja executar um ambiente de produção. Faça:
+1. Com o projeto aberto no terminal, execute `npm install --save-optional @rollup/rollup-linux-x64-gnu`.
+2. Após a instalação, execute `docker-compose -f docker-compose.prod.yml up -d --build`.
+3. O servidor de api, o database postgres, o redis e os workers devem estar funcionando.
+4. Para testar, execute os comando `docker compose -f docker-compose.prod.yml logs -f` para ver o log stream de todos os serviços em execução.
+5. Se quiser ver indivdual basta rodar `docker compose -f docker-compose.prod.yml logs -f app` subsituindo por app, worker, redis ou db.
 
 Se você já possui o <a href="https://pt.wikipedia.org/wiki/Docker_(software)" target="_blank">Docker</a> instalado e configurado em sua máquina, avance para a [etapa 6](#etapa-6) deste procedimento.
 
