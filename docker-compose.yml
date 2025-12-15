@@ -1,25 +1,28 @@
 version: "3.8"
 
 services:
+  # ---------------------------------------------------------------------------
+  # Database (Postgres + PostGIS) — DEV
+  # ---------------------------------------------------------------------------
   db:
-    image: postgres:16-alpine
+    image: postgis/postgis:16-3.4
     container_name: db_evangelismo_dev
     ports:
       - "5432:5432"
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+    env_file: .env
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
       retries: 5
     networks:
       - evangelismo-network
 
+  # ---------------------------------------------------------------------------
+  # Redis — DEV
+  # ---------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
     container_name: redis_evangelismo_dev
@@ -30,12 +33,16 @@ services:
       - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
       retries: 5
     networks:
       - evangelismo-network
 
+  # ---------------------------------------------------------------------------
+  # Prisma Init (DEV ONLY)
+  # generate → migrate dev → seed
+  # ---------------------------------------------------------------------------
   init:
     build:
       context: .
@@ -45,8 +52,7 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
-    env_file:
-      - .env
+    env_file: .env
     environment:
       NODE_ENV: development
       POSTGRES_HOST: db
@@ -58,15 +64,18 @@ services:
         condition: service_healthy
     command: >
       bash -c "
-      echo '⚙️ Running database setup (generate, migrate, seed)...' &&
+      echo '⚙️ Running Prisma setup (dev)...' &&
       npx prisma generate &&
-      npx prisma migrate dev --name init --skip-generate &&
+      npx prisma migrate dev --name init &&
       npx prisma db seed &&
-      echo '✅ Database setup complete.'
+      echo '✅ Prisma dev database ready'
       "
     networks:
       - evangelismo-network
 
+  # ---------------------------------------------------------------------------
+  # API — DEV (Hot Reload)
+  # ---------------------------------------------------------------------------
   app:
     build:
       context: .
@@ -75,12 +84,11 @@ services:
     container_name: api_evangelismo_dev
     ports:
       - "3333:3333"
-      - "5555:5555"
+      - "5555:5555" # Prisma Studio
     volumes:
       - .:/app
       - /app/node_modules
-    env_file:
-      - .env
+    env_file: .env
     environment:
       NODE_ENV: development
       POSTGRES_HOST: db
@@ -88,16 +96,18 @@ services:
     depends_on:
       init:
         condition: service_completed_successfully
-    # FIXED: Added 'npx prisma generate' here so the app builds its own client
     command: >
       bash -c "
       npx prisma generate &&
-      echo '🚀 API running in dev mode' &&
+      echo '🚀 API running in DEV mode' &&
       npm run dev
       "
     networks:
       - evangelismo-network
 
+  # ---------------------------------------------------------------------------
+  # Worker — DEV
+  # ---------------------------------------------------------------------------
   worker:
     build:
       context: .
@@ -107,8 +117,7 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
-    env_file:
-      - .env
+    env_file: .env
     environment:
       NODE_ENV: development
       POSTGRES_HOST: db
@@ -116,11 +125,10 @@ services:
     depends_on:
       init:
         condition: service_completed_successfully
-    # FIXED: Added 'npx prisma generate' here too
     command: >
       bash -c "
       npx prisma generate &&
-      echo '🔧 Worker running in dev mode' &&
+      echo '🔧 Worker running in DEV mode' &&
       npm run start:worker
       "
     networks:

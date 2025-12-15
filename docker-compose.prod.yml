@@ -2,13 +2,13 @@ version: "3.8"
 
 services:
   # ---------------------------------------------------------------------------
-  # Database & Cache (Standard Infra)
+  # Database (Postgres + PostGIS)
   # ---------------------------------------------------------------------------
   db:
-    image: postgres:16-alpine
+    image: postgis/postgis:16-3.4
     container_name: db_evangelismo_prod
     restart: always
-    env_file: .env # Injects POSTGRES variables from host file
+    env_file: .env
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -19,6 +19,9 @@ services:
     networks:
       - evangelismo-network
 
+  # ---------------------------------------------------------------------------
+  # Redis (Cache / Queue)
+  # ---------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
     container_name: redis_evangelismo_prod
@@ -35,7 +38,7 @@ services:
       - evangelismo-network
 
   # ---------------------------------------------------------------------------
-  # Migrator (One-off task)
+  # Prisma Migrator (ONE-SHOT, SAFE FOR PROD)
   # ---------------------------------------------------------------------------
   migrator:
     build:
@@ -43,12 +46,12 @@ services:
       dockerfile: Dockerfile
       target: production
     container_name: migrator_evangelismo_prod
-    # Uses prisma migrate deploy (safe for prod)
     command: npx prisma migrate deploy
     env_file: .env
     depends_on:
       db:
         condition: service_healthy
+    restart: "no"
     networks:
       - evangelismo-network
 
@@ -64,8 +67,7 @@ services:
     restart: always
     ports:
       - "3333:3333"
-    env_file: .env # Reads host .env -> Injects to Container ENV
-    # CMD is inherited from Dockerfile (node dist/server.js)
+    env_file: .env
     depends_on:
       migrator:
         condition: service_completed_successfully
@@ -85,11 +87,10 @@ services:
     container_name: worker_evangelismo_prod
     restart: always
     env_file: .env
-    # OVERRIDE: Explicitly run the worker script
     command: node dist/worker.js
     depends_on:
-      app:
-        condition: service_started
+      migrator:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     networks:
