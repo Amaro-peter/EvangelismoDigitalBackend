@@ -1,17 +1,61 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-source ~/.bashrc
+echo "🚀 Starting production deploy..."
 
+# ---------------------------------------------------------------------------
+# 1. Load environment variables (NOT injected into containers as files)
+# ---------------------------------------------------------------------------
+echo "🔐 Loading environment variables..."
+set -a
+source .env
+set +a
+
+# Sanity check (fail fast)
+: "${POSTGRES_USER:?Missing POSTGRES_USER}"
+: "${POSTGRES_PASSWORD:?Missing POSTGRES_PASSWORD}"
+: "${POSTGRES_DB:?Missing POSTGRES_DB}"
+: "${DATABASE_URL:?Missing DATABASE_URL}"
+: "${REDIS_PASSWORD:?Missing REDIS_PASSWORD}"
+
+# ---------------------------------------------------------------------------
+# 2. Pull latest code
+# ---------------------------------------------------------------------------
+echo "📦 Pulling latest code..."
 git pull origin main
 
-npm ci
+# ---------------------------------------------------------------------------
+# 3. Build images
+# ---------------------------------------------------------------------------
+echo "🐳 Building Docker images..."
+docker compose -f docker-compose.prod.yml build
 
-npm run build
+# ---------------------------------------------------------------------------
+# 4. Start database & redis first
+# ---------------------------------------------------------------------------
+echo "🗄️  Starting database and redis..."
+docker compose -f docker-compose.prod.yml up -d db redis
 
-npx prisma migrate deploy
+# ---------------------------------------------------------------------------
+# 5. Run migrator (ONE-SHOT)
+# ---------------------------------------------------------------------------
+echo "🧬 Running Prisma migrator..."
+docker compose -f docker-compose.prod.yml up --abort-on-container-exit migrator
 
-npx prisma db seed
+# ---------------------------------------------------------------------------
+# 6. Start application services
+# ---------------------------------------------------------------------------
+echo "⚙️  Starting application services..."
+docker compose -f docker-compose.prod.yml up -d app worker
 
-env ASDF_NODEJS_VERSION=$NODE_VERSION_PM2 pm2 reload ecosystem.config.js
+# ---------------------------------------------------------------------------
+# 7. Cleanup
+# ---------------------------------------------------------------------------
+echo "🧹 Cleaning unused images..."
+docker image prune -f
 
-env ASDF_NODEJS_VERSION=$NODE_VERSION_PM2 pm2 reload ecosystem-dev.config.js
+# ---------------------------------------------------------------------------
+# 8. Status
+# ---------------------------------------------------------------------------
+echo "✅ Deployment finished successfully!"
+docker compose -f docker-compose.prod.yml ps

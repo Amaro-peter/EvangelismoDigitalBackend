@@ -5,12 +5,14 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
 }
 
 enum AuthenticationStatus {
@@ -70,8 +72,8 @@ model User {
 }
 
 model FormSubmission {
-  id               String   @id @default(uuid())
-  publicId         String   @unique @default(uuid())
+  id               Int      @id @default(autoincrement())
+  publicId         String   @unique @default(uuid(7)) @map("public_id")
   name             String
   lastName         String
   email            String
@@ -81,4 +83,18 @@ model FormSubmission {
   updatedAt        DateTime @updatedAt
 
   @@map("form_submissions")
+}
+
+model Church {
+  id        Int                                    @id @default(autoincrement())
+  publicId  String                                 @unique @default(uuid(7)) @map("public_id")
+  name      String
+  address   String?
+  lat       Float
+  lon       Float
+  geog      Unsupported("geography(Point, 4326)")?
+  createdAt DateTime                               @default(now()) @map("created_at")
+  updatedAt DateTime                               @updatedAt @map("updated_at")
+
+  @@map("churches")
 }
