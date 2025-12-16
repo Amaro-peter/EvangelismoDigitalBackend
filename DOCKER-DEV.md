@@ -92,6 +92,8 @@ The `docker-dev.sh` script provides convenient commands for development:
 
 # Or manually
 npx prisma migrate dev --name description_of_change
+
+# Note: PostGIS extensions are automatically set up after migrations
 ```
 
 ### 4. View Logs
@@ -145,6 +147,18 @@ netstat -ano | findstr :3333
 
 # Regenerate Prisma client
 npx prisma generate
+```
+
+### PostGIS Extension Issues
+
+```bash
+# Check PostGIS is installed
+./docker-dev.sh shell
+psql $DATABASE_URL -c "SELECT PostGIS_version();"
+
+# Manually run PostGIS setup
+./docker-dev.sh shell
+psql $DATABASE_URL -f /app/postgis_setup.sql
 ```
 
 ### Redis Connection Issues

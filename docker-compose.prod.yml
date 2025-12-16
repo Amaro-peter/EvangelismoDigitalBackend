@@ -5,10 +5,12 @@ services:
   # Database (Postgres + PostGIS)
   # ---------------------------------------------------------------------------
   db:
-    image: postgis/postgis:16-3.4
-    container_name: db_evangelismo_prod
+    image: postgis/postgis@sha256:REPLACE_WITH_REAL_DIGEST
     restart: always
-    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -16,6 +18,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
     networks:
       - evangelismo-network
 
@@ -23,10 +30,14 @@ services:
   # Redis (Cache / Queue)
   # ---------------------------------------------------------------------------
   redis:
-    image: redis:7-alpine
-    container_name: redis_evangelismo_prod
+    image: redis@sha256:REPLACE_WITH_REAL_DIGEST
     restart: always
-    command: redis-server --requirepass ${REDIS_PASSWORD}
+    command: >
+      redis-server
+      --requirepass "${REDIS_PASSWORD}"
+      --appendonly yes
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
     healthcheck:
@@ -34,24 +45,52 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
     networks:
       - evangelismo-network
 
   # ---------------------------------------------------------------------------
-  # Prisma Migrator (ONE-SHOT, SAFE FOR PROD)
+  # Prisma Migrator (ONE-SHOT)
   # ---------------------------------------------------------------------------
   migrator:
     build:
       context: .
       dockerfile: Dockerfile
-      target: production
-    container_name: migrator_evangelismo_prod
-    command: npx prisma migrate deploy
-    env_file: .env
+      target: builder
+    restart: "no"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      POSTGRES_HOST: db
+      REDIS_HOST: redis
     depends_on:
       db:
         condition: service_healthy
-    restart: "no"
+    command:
+      - bash
+      - -c
+      - |
+        echo "⏳ Waiting for database..."
+        sleep 3
+
+        echo "🚀 Applying Prisma migrations..."
+        npx prisma migrate deploy
+
+        echo "🗺️  Ensuring PostGIS setup..."
+        npx prisma db execute \
+          --file=/app/sql_scripts/postgis_setup.sql \
+          --schema=public || true
+
+        echo "🔄 Generating Prisma Client..."
+        npx prisma generate
+
+        echo "✅ Migration completed"
+    volumes:
+      - ./sql_scripts:/app/sql_scripts:ro
     networks:
       - evangelismo-network
 
@@ -63,16 +102,34 @@ services:
       context: .
       dockerfile: Dockerfile
       target: production
-    container_name: api_evangelismo_prod
     restart: always
     ports:
       - "3333:3333"
-    env_file: .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_HOST: redis
+      POSTGRES_HOST: db
     depends_on:
       migrator:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3333/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
     networks:
       - evangelismo-network
 
@@ -84,15 +141,37 @@ services:
       context: .
       dockerfile: Dockerfile
       target: production
-    container_name: worker_evangelismo_prod
     restart: always
-    env_file: .env
     command: node dist/worker.js
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_HOST: redis
+      POSTGRES_HOST: db
     depends_on:
       migrator:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"require('fs').accessSync('/proc/1'); process.exit(0)\""
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 384M
     networks:
       - evangelismo-network
 

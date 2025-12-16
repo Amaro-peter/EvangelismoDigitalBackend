@@ -1,9 +1,6 @@
 version: "3.8"
 
 services:
-  # ---------------------------------------------------------------------------
-  # Database (Postgres + PostGIS) — DEV
-  # ---------------------------------------------------------------------------
   db:
     image: postgis/postgis:16-3.4
     container_name: db_evangelismo_dev
@@ -20,9 +17,6 @@ services:
     networks:
       - evangelismo-network
 
-  # ---------------------------------------------------------------------------
-  # Redis — DEV
-  # ---------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
     container_name: redis_evangelismo_dev
@@ -41,41 +35,67 @@ services:
 
   # ---------------------------------------------------------------------------
   # Prisma Init (DEV ONLY)
-  # generate → migrate dev → seed
+  # reset → migrate dev (with SQL injection) → seed
   # ---------------------------------------------------------------------------
   init:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: development
-    container_name: init_evangelismo_dev
-    volumes:
-      - .:/app
-      - /app/node_modules
-    env_file: .env
-    environment:
-      NODE_ENV: development
-      POSTGRES_HOST: db
-      REDIS_HOST: redis
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: >
-      bash -c "
-      echo '⚙️ Running Prisma setup (dev)...' &&
-      npx prisma generate &&
-      npx prisma migrate dev --name init &&
-      npx prisma db seed &&
-      echo '✅ Prisma dev database ready'
-      "
-    networks:
-      - evangelismo-network
+      build:
+        context: .
+        dockerfile: Dockerfile
+        target: development
+      container_name: init_evangelismo_dev
+      volumes:
+        - .:/app
+        - /app/node_modules
+      env_file: .env
+      environment:
+        NODE_ENV: development
+        POSTGRES_HOST: db
+        REDIS_HOST: redis
+      depends_on:
+        db:
+          condition: service_healthy
+        redis:
+          condition: service_healthy
+      command:
+        - bash
+        - -c
+        - |
+          echo '⏳ Aguardando banco...'
+          sleep 5
+          
+          echo '🗑️  Limpando migrações antigas...'
+          rm -rf prisma/migrations/*
+          
+          echo '🔄 Resetando banco (remove drift)...'
+          npx prisma migrate reset --force --skip-seed
+          
+          echo '⚙️  Gerando migration (Init)...'
+          npx prisma migrate dev --create-only --name init
+          
+          echo '🗺️  Injetando SQL Manual...'
+          MIGRATION_FILE=$$(find prisma/migrations -type f -name 'migration.sql' | head -n 1)
+          
+          if [ -f "$$MIGRATION_FILE" ]; then
+            cat /app/sql_scripts/postgis_setup.sql >> "$$MIGRATION_FILE"
+            echo '✅ SQL injetado: $$MIGRATION_FILE'
+          else
+            echo '❌ ERRO: Migration file não encontrado!'
+            exit 1
+          fi
+          
+          echo '🚀 Aplicando migração com deploy...'
+          npx prisma migrate deploy
+          
+          echo '🔄 Regenerando Client...'
+          npx prisma generate
+          
+          echo '🌱 Seeding...'
+          npx prisma db seed
+          
+          echo '✅ INIT CONCLUÍDO COM SUCESSO'
+      networks:
+        - evangelismo-network
 
-  # ---------------------------------------------------------------------------
-  # API — DEV (Hot Reload)
-  # ---------------------------------------------------------------------------
   app:
     build:
       context: .
@@ -84,7 +104,7 @@ services:
     container_name: api_evangelismo_dev
     ports:
       - "3333:3333"
-      - "5555:5555" # Prisma Studio
+      - "5555:5555"
     volumes:
       - .:/app
       - /app/node_modules
@@ -96,18 +116,16 @@ services:
     depends_on:
       init:
         condition: service_completed_successfully
-    command: >
-      bash -c "
-      npx prisma generate &&
-      echo '🚀 API running in DEV mode' &&
-      npm run dev
-      "
+    command:
+      - bash
+      - -c
+      - |
+        npx prisma generate
+        echo '🚀 API running in DEV mode'
+        npm run dev
     networks:
       - evangelismo-network
 
-  # ---------------------------------------------------------------------------
-  # Worker — DEV
-  # ---------------------------------------------------------------------------
   worker:
     build:
       context: .
@@ -125,12 +143,13 @@ services:
     depends_on:
       init:
         condition: service_completed_successfully
-    command: >
-      bash -c "
-      npx prisma generate &&
-      echo '🔧 Worker running in DEV mode' &&
-      npm run start:worker
-      "
+    command:
+      - bash
+      - -c
+      - |
+        npx prisma generate
+        echo '🔧 Worker running in DEV mode'
+        npm run start:worker
     networks:
       - evangelismo-network
 
