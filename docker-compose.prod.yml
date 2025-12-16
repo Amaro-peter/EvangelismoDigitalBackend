@@ -1,12 +1,11 @@
-version: "3.8"
-
 services:
   # ---------------------------------------------------------------------------
   # Database (Postgres + PostGIS)
   # ---------------------------------------------------------------------------
   db:
-    image: postgis/postgis@sha256:REPLACE_WITH_REAL_DIGEST
+    image: postgis/postgis@sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5
     restart: always
+    user: postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -18,38 +17,49 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    mem_limit: 1g
+    cpus: "1.0"
     deploy:
       resources:
+        reservations:
+          cpus: "0.5"
+          memory: 512M
         limits:
           cpus: "1.0"
           memory: 1G
+    security_opt:
+      - no-new-privileges:true
     networks:
       - evangelismo-network
 
   # ---------------------------------------------------------------------------
-  # Redis (Cache / Queue)
+  # Redis (Cache / Queue) - SECURE: Password via config file
   # ---------------------------------------------------------------------------
   redis:
-    image: redis@sha256:REPLACE_WITH_REAL_DIGEST
+    image: redis@sha256:ee64a64eaab618d88051c3ade8f6352d11531fcf79d9a4818b9b183d8c1d18ba
     restart: always
-    command: >
-      redis-server
-      --requirepass "${REDIS_PASSWORD}"
-      --appendonly yes
-    environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    user: redis
+    command: redis-server /usr/local/etc/redis/redis.conf
     volumes:
       - redis_data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+    mem_limit: 256m
+    cpus: "0.5"
     deploy:
       resources:
+        reservations:
+          cpus: "0.25"
+          memory: 128M
         limits:
-          cpus: "0.50"
+          cpus: "0.5"
           memory: 256M
+    security_opt:
+      - no-new-privileges:true
     networks:
       - evangelismo-network
 
@@ -62,11 +72,9 @@ services:
       dockerfile: Dockerfile
       target: builder
     restart: "no"
+    user: root
     environment:
-      NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
-      POSTGRES_HOST: db
-      REDIS_HOST: redis
     depends_on:
       db:
         condition: service_healthy
@@ -74,23 +82,17 @@ services:
       - bash
       - -c
       - |
-        echo "⏳ Waiting for database..."
-        sleep 3
-
         echo "🚀 Applying Prisma migrations..."
         npx prisma migrate deploy
 
         echo "🗺️  Ensuring PostGIS setup..."
-        npx prisma db execute \
-          --file=/app/sql_scripts/postgis_setup.sql \
-          --schema=public || true
-
-        echo "🔄 Generating Prisma Client..."
-        npx prisma generate
+        npx prisma db execute --file=./sql_scripts/postgis_setup.sql --schema=./prisma/schema.prisma || true
 
         echo "✅ Migration completed"
     volumes:
       - ./sql_scripts:/app/sql_scripts:ro
+    security_opt:
+      - no-new-privileges:true
     networks:
       - evangelismo-network
 
@@ -103,33 +105,61 @@ services:
       dockerfile: Dockerfile
       target: production
     restart: always
+    user: nodejs
     ports:
-      - "3333:3333"
+      - "${APP_PORT}:${APP_PORT}"
     environment:
-      NODE_ENV: production
+      NODE_ENV: ${NODE_ENV}
+      LOG_LEVEL: ${LOG_LEVEL}
+      PROJECT_NAME: ${PROJECT_NAME}
+      APP_NAME: ${APP_NAME}
+      APP_PORT: ${APP_PORT}
+      JWT_SECRET: ${JWT_SECRET}
+      FRONTEND_URL: ${FRONTEND_URL}
+      HASH_SALT_ROUNDS: ${HASH_SALT_ROUNDS}
+      SENTRY_DSN: ${SENTRY_DSN}
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      SCHEMA: ${SCHEMA}
       DATABASE_URL: ${DATABASE_URL}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
-      REDIS_HOST: redis
-      POSTGRES_HOST: db
+      SMTP_EMAIL: ${SMTP_EMAIL}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_SECURE: ${SMTP_SECURE}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
     depends_on:
       migrator:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3333/health"]
+      test: ["CMD", "node", "-e", "const http = require('http'); http.get('http://localhost:' + process.env.APP_PORT + '/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }).on('error', () => { process.exit(1); });"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
-      start_period: 40s
+      start_period: 20s
     read_only: true
     tmpfs:
       - /tmp
+    mem_limit: 384m
+    cpus: "0.75"
     deploy:
       resources:
+        reservations:
+          cpus: "0.5"
+          memory: 256M
         limits:
-          cpus: "1.0"
-          memory: 512M
+          cpus: "0.75"
+          memory: 384M
+    security_opt:
+      - no-new-privileges:true
     networks:
       - evangelismo-network
 
@@ -142,39 +172,51 @@ services:
       dockerfile: Dockerfile
       target: production
     restart: always
+    user: nodejs
     command: node dist/worker.js
     environment:
-      NODE_ENV: production
+      NODE_ENV: ${NODE_ENV}
+      LOG_LEVEL: ${LOG_LEVEL}
+      PROJECT_NAME: ${PROJECT_NAME}
       DATABASE_URL: ${DATABASE_URL}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
-      REDIS_HOST: redis
-      POSTGRES_HOST: db
+      JWT_SECRET: ${JWT_SECRET}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      SMTP_EMAIL: ${SMTP_EMAIL}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_SECURE: ${SMTP_SECURE}
     depends_on:
       migrator:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "node -e \"require('fs').accessSync('/proc/1'); process.exit(0)\""
-        ]
+      test: ["CMD", "node", "-e", "require('redis').createClient({password:process.env.REDIS_PASSWORD}).connect().then(()=>process.exit(0)).catch(()=>process.exit(1))"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
       start_period: 20s
     read_only: true
     tmpfs:
       - /tmp
+    mem_limit: 256m
+    cpus: "0.5"
     deploy:
       resources:
+        reservations:
+          cpus: "0.25"
+          memory: 128M
         limits:
-          cpus: "0.75"
-          memory: 384M
+          cpus: "0.5"
+          memory: 256M
+    security_opt:
+      - no-new-privileges:true
     networks:
       - evangelismo-network
-
 volumes:
   pgdata:
   redis_data:
