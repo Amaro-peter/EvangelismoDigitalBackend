@@ -4,6 +4,8 @@ import { logError } from '@lib/logger/helpers'
 import { prisma } from '@lib/prisma'
 
 export async function healthCheck(_request: FastifyRequest, reply: FastifyReply) {
+  const memoryUsage = process.memoryUsage()
+
   const startTime = Date.now()
   try {
     await prisma.$queryRaw`SELECT 1`
@@ -14,7 +16,17 @@ export async function healthCheck(_request: FastifyRequest, reply: FastifyReply)
 
     logger.info({ uptime, duration }, 'Healthcheck successful')
 
-    return reply.status(200).send({ status: 'ok', uptime, timestamp })
+    return reply.status(200).send({
+      status: 'ok',
+      uptime,
+      timestamp,
+      memory: {
+        rss: `${Math.round(memoryUsage.rss / 1024 / 1024)}MB`,
+        heapUsed: `${Math.round(memoryUsage.heapUsed / 1024 / 1024)}MB`,
+        heapTotal: `${Math.round(memoryUsage.heapTotal / 1024 / 1024)}MB`,
+        external: `${Math.round(memoryUsage.external / 1024 / 1024)}MB`,
+      },
+    })
   } catch (error) {
     const duration = Date.now() - startTime
     logError(error, { duration }, 'Healthcheck failed')
