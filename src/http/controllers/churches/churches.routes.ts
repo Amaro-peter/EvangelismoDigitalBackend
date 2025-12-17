@@ -1,6 +1,5 @@
 import { FastifyInstance } from 'fastify'
 import { findNearestChurches } from './find-nearest-churches.controller'
-import { findNearestChurchesQueryJsonSchema } from '@http/schemas/churches/find-nearest-churches-schema'
 import { createChurch } from './create-church.controller'
 import { verifyJwt } from '@middlewares/verify-jwt.middleware'
 import { verifyUserRole } from '@middlewares/verify-user-role.middleware'
@@ -17,7 +16,13 @@ export async function churchesRoutes(app: FastifyInstance) {
         },
       },
       schema: {
-        querystring: findNearestChurchesQueryJsonSchema,
+        querystring: {
+          type: 'object',
+          properties: {
+            cep: { type: 'string' },
+          },
+          required: ['cep'],
+        },
         description: 'Busca as 20 igrejas mais próximas de uma coordenada',
         tags: ['churches'],
         response: {
@@ -49,9 +54,5 @@ export async function churchesRoutes(app: FastifyInstance) {
     findNearestChurches,
   )
 
-  app.post(
-    '/create', 
-    { onRequest: [verifyJwt, verifyUserRole([UserRole.ADMIN])] }, 
-    createChurch
-  )
+  app.post('/create', { onRequest: [verifyJwt, verifyUserRole([UserRole.ADMIN])] }, createChurch)
 }

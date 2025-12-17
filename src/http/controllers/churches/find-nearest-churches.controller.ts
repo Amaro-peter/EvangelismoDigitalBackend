@@ -1,45 +1,51 @@
-import {
-  findNearestChurchesQuerySchema,
-  FindNearestChurchesQuery,
-} from '@http/schemas/churches/find-nearest-churches-schema'
+import { cepSchema } from '@http/schemas/utils/cep'
 import { logger } from '@lib/logger'
 import { LatitudeRangeError } from '@use-cases/errors/latitude-range-error'
 import { LongitudeRangeError } from '@use-cases/errors/longitude-range-error'
+import { makeCepToLatLonUseCase } from '@use-cases/factories/make-cep-to-lat-lon-use-case'
 import { makeFindNearestChurchesUseCase } from '@use-cases/factories/make-find-nearest-churches-use-case'
 import { FastifyReply, FastifyRequest } from 'fastify'
 
 export async function findNearestChurches(
-  request: FastifyRequest<{ Querystring: FindNearestChurchesQuery }>,
+  request: FastifyRequest<{ Querystring: { cep: string } }>,
   reply: FastifyReply,
 ) {
   try {
-    const { lat, lon } = findNearestChurchesQuerySchema.parse(request.query)
+    const cep = cepSchema.parse(request.query.cep)
 
     if (process.env.NODE_ENV !== 'production' || Math.random() < 0.1) {
       logger.info({
-        msg: 'Encontrando igrejas mais próximas',
-        userLat: lat,
-        userLon: lon,
+        msg: 'Cep do usuário recebido para encontrar igrejas próximas',
         ip: request.ip,
+      })
+    }
+
+    const cepToLatLonUseCase = makeCepToLatLonUseCase()
+    const { userLat, userLon } = await cepToLatLonUseCase.execute({ cep })
+
+    if (process.env.NODE_ENV !== 'production' || Math.random() < 0.1) {
+      logger.info({
+        msg: 'Coordenadas obtidas a partir do CEP',
+        userLat,
+        userLon,
       })
     }
 
     const findNearestChurchesUseCase = makeFindNearestChurchesUseCase()
 
     const { churches, totalFound } = await findNearestChurchesUseCase.execute({
-      userLat: lat,
-      userLon: lon,
+      userLat: userLat,
+      userLon: userLon,
     })
 
     if (process.env.NODE_ENV !== 'production' || Math.random() < 0.1) {
       logger.info({
         msg: 'Igrejas mais próximas encontradas com sucesso',
         totalFound,
-        userLat: lat,
-        userLon: lon,
       })
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const churchesWithoutId = churches.map(({ id, ...church }) => church)
 
     return reply.status(200).send({ churches: churchesWithoutId, totalFound })
@@ -48,18 +54,15 @@ export async function findNearestChurches(
       logger.warn({
         msg: 'Invalid coordinates provided',
         error: error.message,
-        lat: request.query.lat,
-        lon: request.query.lon,
         ip: request.ip,
       })
+
       return reply.status(400).send({ message: error.message })
     }
 
     logger.error({
       msg: 'Error finding nearest churches',
       error,
-      lat: request.query.lat,
-      lon: request.query.lon,
       ip: request.ip,
     })
 

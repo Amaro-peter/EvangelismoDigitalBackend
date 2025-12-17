@@ -11,9 +11,10 @@ export interface NearbyChurch {
 }
 
 export interface FindNearbyParams {
-    userLat: number
-    userLon: number
-    limit?: number
+  userLat: number
+  userLon: number
+  limit?: number
+  maxRadiusMeters?: number
 }
 
 export interface Church {
