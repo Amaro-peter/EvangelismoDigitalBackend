@@ -129,7 +129,7 @@ Neste repositório está o projeto para ...
 2. Após a instalação, execute `docker-compose -f docker-compose.prod.yml up -d --build`.
 3. O servidor de api, o database postgres, o redis e os workers devem estar funcionando.
 4. Para testar, execute os comando `docker compose -f docker-compose.prod.yml logs -f` para ver o log stream de todos os serviços em execução.
-5. Se quiser ver indivdual basta rodar `docker compose -f docker-compose.prod.yml logs -f app` subsituindo por app, worker, redis ou db.
+5. Se quiser ver cada serviço de forma individual, basta rodar `docker compose -f docker-compose.prod.yml logs -f app` subsituindo por app, worker, redis ou db.
 
 Se você já possui o <a href="https://pt.wikipedia.org/wiki/Docker_(software)" target="_blank">Docker</a> instalado e configurado em sua máquina, avance para a [etapa 6](#etapa-6) deste procedimento.
 
