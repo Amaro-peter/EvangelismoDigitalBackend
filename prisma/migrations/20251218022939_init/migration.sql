@@ -104,62 +104,30 @@ CREATE UNIQUE INDEX "churches_public_id_key" ON "public"."churches"("public_id")
 
 -- AddForeignKey
 ALTER TABLE "public"."authentication_audit" ADD CONSTRAINT "authentication_audit_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION;
--- PostGIS Extension Setup for Churches Table
--- This script is idempotent and safe to run multiple times
-
--- 1. Enable PostGIS extension
+-- Enable PostGIS (safe & idempotent)
 CREATE EXTENSION IF NOT EXISTS postgis;
 
--- 2. Verify churches table exists before proceeding
-DO $$
-BEGIN
-    -- Check if churches table exists
-    IF NOT EXISTS (
-        SELECT 1 
-        FROM information_schema.tables 
-        WHERE table_name = 'churches'
-    ) THEN
-        RAISE NOTICE 'Churches table does not exist yet. Skipping column addition.';
-    ELSE
-        -- Add geography column if it doesn't exist
-        IF NOT EXISTS (
-            SELECT 1 
-            FROM information_schema.columns 
-            WHERE table_name = 'churches' AND column_name = 'geog'
-        ) THEN
-            ALTER TABLE "churches"
-            ADD COLUMN geog GEOGRAPHY(Point, 4326)
-            GENERATED ALWAYS AS (
-                ST_SetSRID(ST_MakePoint(lon, lat), 4326)::geography
-            ) STORED;
-            
-            RAISE NOTICE 'Added geog column to churches table';
-        ELSE
-            RAISE NOTICE 'Column geog already exists in churches table';
-        END IF;
-    END IF;
-END $$;
+-- Add geog column if it doesn't exist (assuming it's created via Prisma schema)
+-- Note: Prisma schema defines geog as Unsupported("geography(Point, 4326)")?, so ensure it's added in migration
 
--- 3. Create spatial index for efficient KNN queries
-CREATE INDEX IF NOT EXISTS "churches_geog_idx"
-ON "churches"
+-- Create or replace trigger function to calculate geog on insert/update
+CREATE OR REPLACE FUNCTION update_church_geog() RETURNS TRIGGER AS $$
+BEGIN
+    NEW.geog := ST_SetSRID(ST_MakePoint(NEW.lon, NEW.lat), 4326)::geography;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to auto-calculate geog for seed inserts and individual church inserts
+DROP TRIGGER IF EXISTS trg_update_church_geog ON churches;
+CREATE TRIGGER trg_update_church_geog BEFORE INSERT OR UPDATE ON churches
+FOR EACH ROW EXECUTE PROCEDURE update_church_geog();
+
+-- Spatial index (created once, reused forever)
+CREATE INDEX IF NOT EXISTS churches_geog_gist_idx
+ON churches
 USING GIST (geog);
 
--- 4. Add comment
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1 
-        FROM information_schema.columns 
-        WHERE table_name = 'churches' AND column_name = 'geog'
-    ) THEN
-        COMMENT ON COLUMN "churches".geog IS 'Auto-generated geography point from lon/lat for spatial queries';
-    END IF;
-END $$;
-
--- 5. Verify PostGIS setup
-DO $$
-BEGIN
-    RAISE NOTICE 'PostGIS version: %', PostGIS_Version();
-    RAISE NOTICE 'PostGIS setup completed successfully';
-END $$;
+-- Optional documentation
+COMMENT ON COLUMN churches.geog
+IS 'Auto-calculated geography point derived from lat/lon via trigger';

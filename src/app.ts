@@ -8,6 +8,7 @@ import z, { ZodError } from 'zod'
 import { messages } from '@constants/messages'
 import fastifyJwt from '@fastify/jwt'
 import fastifyCors from '@fastify/cors'
+import rateLimit from '@fastify/rate-limit'
 import * as Sentry from '@sentry/node'
 import { nodeProfilingIntegration } from '@sentry/profiling-node'
 
@@ -28,6 +29,24 @@ if (env.SENTRY_DSN) {
   })
 
   Sentry.setupFastifyErrorHandler(app)
+}
+
+if (env.NODE_ENV === 'production') {
+  setInterval(() => {
+    const memUsage = process.memoryUsage()
+    const heapUsedMB = memUsage.heapUsed / 1024 / 1024
+    const rssMB = memUsage.rss / 1024 / 1024
+
+    // Alert at 400MB heap usage (80% of 512MB Docker limit)
+    if (heapUsedMB > 400) {
+      logger.warn({
+        msg: 'High memory usage detected',
+        heapUsedMB: Math.round(heapUsedMB),
+        rssMB: Math.round(rssMB),
+        heapTotalMB: Math.round(memUsage.heapTotal / 1024 / 1024),
+      })
+    }
+  }, 60000)
 }
 
 app.addHook('onRequest', (request, _reply, done) => {
@@ -86,6 +105,12 @@ app.register(fastifyCors, {
 
 app.register(fastifyJwt, {
   secret: env.JWT_SECRET,
+})
+
+app.register(rateLimit, {
+  global: false,
+  max: 100,
+  timeWindow: '15 minutes',
 })
 
 app.register(appRoutes)

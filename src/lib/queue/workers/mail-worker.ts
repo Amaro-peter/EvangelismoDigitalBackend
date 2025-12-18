@@ -1,8 +1,8 @@
-import { logger } from "@lib/logger";
 import { Worker } from 'bullmq'
 import { MAIL_QUEUE_NAME } from '../mail-queue'
 import { makeSendEmailUseCase } from '@use-cases/factories/make-send-email-use-case'
 import { redisConnection } from '@lib/redis/connection'
+import { logger } from '@lib/logger'
 
 const CONCURRENCY_LIMIT = 10 // Ajuste conforme limite do seu SMTP
 const RATE_LIMIT = 100 // Limite de taxa (Rate Limit) do provedor de e-mail
