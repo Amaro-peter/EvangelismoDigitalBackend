@@ -139,10 +139,28 @@ export class PrismaChurchesRepository implements ChurchesRepository {
   }
 
   async createChurch(data: Prisma.ChurchCreateInput): Promise<Church> {
-    const church = await prisma.church.create({
-      data,
-    })
-
+    const church: Church = await prisma.$queryRaw<Church>`
+      INSERT INTO churches (public_id, name, address, lat, lon, created_at, updated_at)
+      VALUES (
+        gen_random_uuid()::text,
+        ${data.name},
+        ${data.address},
+        ${data.lat},
+        ${data.lon},
+        NOW(),
+        NOW()
+      )
+      RETURNING
+        id,
+        public_id AS "publicId",
+        name,
+        address,
+        lat,
+        lon,
+        geog::text AS geog,
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+    `
     return church
   }
 }

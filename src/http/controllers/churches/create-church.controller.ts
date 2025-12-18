@@ -28,9 +28,12 @@ export async function createChurch(
         const churchesWithoutId = (({ id, ...church }) => church)(church)
 
         logger.info({
-            msg: 'Igreja criada com sucesso',
-            churchName: name,
-            churchAddress: address,
+          msg: 'Igreja criada com sucesso',
+          churchName: name,
+          churchAddress: address,
+          lat: churchesWithoutId.lat,
+          lon: churchesWithoutId.lon,
+          geog: churchesWithoutId.geog,
         })
 
         return reply.status(201).send({ church: churchesWithoutId });
