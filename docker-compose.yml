@@ -74,7 +74,7 @@ services:
           MIGRATION_FILE=$$(find prisma/migrations -type f -name 'migration.sql' | head -n 1)
           
           if [ -f "$$MIGRATION_FILE" ]; then
-            cat /app/sql_scripts/postgis_setup.sql >> "$$MIGRATION_FILE"
+            cat /app/sql_scripts/postgis_trigger_setup.sql >> "$$MIGRATION_FILE"
             echo '✅ SQL injetado: $$MIGRATION_FILE'
           else
             echo '❌ ERRO: Migration file não encontrado!'

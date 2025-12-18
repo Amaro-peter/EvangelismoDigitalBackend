@@ -82,7 +82,7 @@ services:
 
         echo "🗺️  Ensuring PostGIS setup..."
         npx prisma db execute \
-          --file=/app/sql_scripts/postgis_setup.sql \
+          --file=/app/sql_scripts/postgis_trigger_setup.sql \
           --schema=public || true
 
         echo "🔄 Generating Prisma Client..."

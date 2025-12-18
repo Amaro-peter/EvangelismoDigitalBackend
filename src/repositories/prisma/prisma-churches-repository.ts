@@ -11,7 +11,7 @@ import { Prisma } from '@prisma/client'
  * planner to prune irrelevant partitions and speed up scans/index lookups.
  *
  * Note: Prisma doesn't natively support partitioning in its schema, so apply it via custom SQL
- * migrations (e.g., in a Prisma migration file or postgis_setup.sql). Prisma will query the
+ * migrations (e.g., in a Prisma migration file or postgis_trigger_setup.sql). Prisma will query the
  * partitioned table transparently.
  *
  * Steps to Implement:
