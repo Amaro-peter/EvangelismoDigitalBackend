@@ -116,7 +116,7 @@ Neste repositório está o projeto para ...
 
 <a name="como-executar-o-servidor"></a>
 
-## 💻 Como Executar o Servidor:
+## 💻 Como Executar o Servidor em modo de Desenvolvimento:
 
 1. Abra o terminal - `CMD`, `PowerShell`, `Bash` ou similares - em algum diretório de preferência em sua máquina.
 2. Clone este repositório com o comando: `git clone https://github.com/Amaro-peter/EvangelismoDigitalBackend.git`.
@@ -127,7 +127,7 @@ Neste repositório está o projeto para ...
 7. Rode o comando do `docker-compose up --build` para subir os servidores do projeto.
 8. Se quiser desligar o servidor `docker-compose down -v` (apaga tudo).
 
-### Se você já possui o Docker e deseja executar um ambiente de produção. Faça:
+### Se você já possui o Docker e deseja executar o Servidor em Produção. Faça:
 1. Com o projeto aberto no terminal, execute `npm install --save-optional @rollup/rollup-linux-x64-gnu`.
 2. Após a instalação, execute `docker-compose -f docker-compose.prod.yml up -d --build`.
 3. O servidor de api, o database postgres, o redis e os workers devem estar funcionando.
