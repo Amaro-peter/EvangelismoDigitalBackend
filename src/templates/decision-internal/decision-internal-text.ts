@@ -1,4 +1,4 @@
-export function decisionInternalTextTemplate(name: string, email: string, location?: string) {
+export function decisionInternalTextTemplate(name: string, email: string) {
   return `
             ${name} <${email}> aceitou a Cristo.
         `

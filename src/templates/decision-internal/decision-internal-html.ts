@@ -1,4 +1,10 @@
-export function decisionInternalHtmlTemplate(name: string, lastName: string, email: string, location?: string) {
+export function decisionInternalHtmlTemplate(
+  name: string,
+  lastName: string,
+  email: string,
+  ipAddress: string | string[],
+  location?: string,
+) {
   return `
             <p>
                 Nova decisão por Cristo:
@@ -12,6 +18,9 @@ export function decisionInternalHtmlTemplate(name: string, lastName: string, ema
                 </li>
                 <li>
                     Local: ${location ?? 'não informado'}
+                </li>
+                <li>
+                    IP Address: ${ipAddress}
                 </li>
             </ul>
         `
