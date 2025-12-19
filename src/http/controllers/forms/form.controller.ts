@@ -35,6 +35,7 @@ export async function formSubmission(request: FastifyRequest, reply: FastifyRepl
     logger.info({ formSubmissionId: formSubmission.publicId }, 'Submissão de formulário enviada com sucesso!')
 
     // 2. Enfileiramento de E-mails (Producer)
+    const ipAddress: string | string[] = request.ip || request.headers['x-forwarded-for'] || 'IP não disponível'
 
     if (decisaoPorCristo) {
       await mailQueue.add('decision-for-Christ-user-email', {
@@ -48,8 +49,8 @@ export async function formSubmission(request: FastifyRequest, reply: FastifyRepl
       await mailQueue.add('decision-for-Christ-internal-email', {
         to: process.env.ADMIN_EMAIL,
         subject: decisionInternalSubjectText(),
-        message: decisionInternalTextTemplate(name, email, location),
-        html: decisionInternalHtmlTemplate(name, lastName, email, location),
+        message: decisionInternalTextTemplate(name, email),
+        html: decisionInternalHtmlTemplate(name, lastName, email, ipAddress, location),
         context: { type: 'decision-for-Christ', recipient: 'internal' },
       })
     } else {
