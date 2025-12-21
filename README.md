@@ -119,13 +119,16 @@ Neste repositório está o projeto para ...
 ## 💻 Como Executar o Servidor em modo de Desenvolvimento:
 
 1. Abra o terminal - `CMD`, `PowerShell`, `Bash` ou similares - em algum diretório de preferência em sua máquina.
-2. Clone este repositório com o comando: `git clone https://github.com/Amaro-peter/EvangelismoDigitalBackend.git`.
-3. Navegue para dentro do projeto clonado com o comando: `cd backend-template-reborn`.
-4. Instale as dependências do projeto ao executar no console o comando: `npm install`.
-5. Crie um arquivo `.env` na raiz do projeto copiando o conteúdo do `.env.example`. Preencha manualmente os valores que não estiverem definidos.
-6. Envie no console o comando `npx prisma generate`.
-7. Rode o comando do `docker-compose up --build` para subir os servidores do projeto.
-8. Se quiser desligar o servidor `docker-compose down -v` (apaga tudo).
+2. No terminal, instale nvm através do chocolatey: `choco install nvm`
+3. Clone este repositório com o comando: `git clone https://github.com/Amaro-peter/EvangelismoDigitalBackend.git`.
+4. Navegue para dentro do projeto clonado com o comando: `cd backend-template-reborn`.
+5. Instale a versão do NodeJs com o comando `nvm install 20.19.0`.
+6. Execute `nvm use 20.19.0` para usar a versão
+7. Instale as dependências do projeto ao executar no console o comando: `npm install`.
+8. Crie um arquivo `.env` na raiz do projeto copiando o conteúdo do `.env.example`. Preencha manualmente os valores que não estiverem definidos.
+9. Envie no console o comando `npx prisma generate`.
+10. Rode o comando do `docker-compose up --build` para subir os servidores do projeto.
+11. Se quiser desligar o servidor `docker-compose down -v` (apaga tudo).
 
 ### Se você já possui o Docker e deseja executar o Servidor em Produção. Faça:
 1. Com o projeto aberto no terminal, execute `npm install --save-optional @rollup/rollup-linux-x64-gnu`.
