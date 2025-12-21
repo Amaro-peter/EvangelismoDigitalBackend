@@ -10,7 +10,6 @@ interface UpdateUserUseCaseRequest {
   email?: string
   username?: string
   cpf?: string
-  password?: string
 }
 
 type UpdateUserUseCaseResponse = {
@@ -20,22 +19,12 @@ type UpdateUserUseCaseResponse = {
 export class UpdateUserUseCase {
   constructor(private usersRepository: UserRepository) {}
 
-  async execute({ publicId, password, ...data }: UpdateUserUseCaseRequest): Promise<UpdateUserUseCaseResponse> {
+  async execute({ publicId, ...data }: UpdateUserUseCaseRequest): Promise<UpdateUserUseCaseResponse> {
     const userToUpdate = await this.usersRepository.findBy({ publicId })
 
     if (!userToUpdate) throw new ResourceNotFoundError()
 
-    let passwordHash: string | undefined
-    let passwordChangedAt: Date | undefined
-
-    if (password) {
-      passwordHash = await hash(password, env.HASH_SALT_ROUNDS)
-      passwordChangedAt = new Date()
-    }
-
-    const user = await this.usersRepository.update(userToUpdate.id, {
-      passwordHash,
-      passwordChangedAt,
+    const user = await this.usersRepository.update(userToUpdate.publicId, {
       ...data,
     })
 

@@ -128,6 +128,16 @@ CREATE INDEX IF NOT EXISTS churches_geog_gist_idx
 ON churches
 USING GIST (geog);
 
+-- 1) Case-sensitive unique index on church name
+CREATE UNIQUE INDEX IF NOT EXISTS churches_unique_lower_name_idx
+ON churches ((lower(trim(name))));
+
+-- 2) Approximate unique coordinates 
+-- Acts as a "grid" to prevent identical coordinates from being inserted simultaneously.
+-- Using 7 decimal places creates a grid.
+CREATE UNIQUE INDEX IF NOT EXISTS churches_unique_rounded_coords_idx
+ON churches (round(lat::numeric, 6), round(lon::numeric, 6));
+
 -- Optional documentation
 COMMENT ON COLUMN churches.geog
 IS 'Auto-calculated geography point derived from lat/lon via trigger';

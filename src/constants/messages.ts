@@ -2,6 +2,7 @@ export const messages = {
   validation: {
     invalidData: 'Dados de registro inválidos!',
     userAlreadyExists: 'Já existe um usuário cadastrado com este CPF ou E-mail',
+    churchAlreadyExists: 'Já existe uma igreja cadastrada com este nome e/ou coordenadas',
     invalidCpf: 'CPF inválido!',
     invalidJson: 'O corpo da requisição não está em formato JSON válido. Verifique a estrutura dos dados enviados.',
     invalidCep: 'CEP inválido!',
@@ -17,13 +18,14 @@ export const messages = {
     internalServer: 'Erro interno do servidor!',
     invalidCredentials: 'Credenciais inválidas!',
     resourceNotFound: 'Recurso não encontrado!',
+    coordinatesNotFound: 'Coordenadas não encontradas para o endereço fornecido.',
+    churchNotFound: 'Igreja não encontrada.',
     forbidden: 'Acesso negado!',
     unauthorized: 'Não autorizado!',
     invalidToken: 'Token inválido ou expirado!',
     passwordChangeRequired: 'É necessário alterar a senha antes de acessar o sistema!',
     formSubmissionFailed: 'Falha ao enviar o formulário.',
     createChurchFailed: 'Falha ao criar a igreja.',
-    coordinatesNotFound: 'Coordenadas não encontradas para o endereço fornecido.',
   },
   info: {
     passwordResetGeneric: 'Se o usuário existir, você receberá um e-mail com instruções para redefinir a senha.',
