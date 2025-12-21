@@ -65,7 +65,7 @@ services:
           rm -rf prisma/migrations/*
           
           echo '🔄 Resetando banco (remove drift)...'
-          npx prisma migrate reset --force --skip-seed
+          npx prisma migrate reset --force
           
           echo '⚙️  Gerando migration (Init)...'
           npx prisma migrate dev --create-only --name init

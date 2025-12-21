@@ -1,5 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import { env } from '@env/index'
+import { Pool } from 'pg'
+import { PrismaPg } from '@prisma/adapter-pg'
 
 /**
  * Prisma Client Singleton
@@ -14,6 +16,14 @@ import { env } from '@env/index'
  * - Rate limit of 20 req/min for church-finding endpoints
  * - Supports ~100 concurrent requests comfortably
  */
+
+export const pool = new Pool({
+  connectionString: env.DATABASE_URL,
+})
+
+const adapter: unknown = new PrismaPg(pool)
+
 export const prisma = new PrismaClient({
+  adapter,
   log: env.LOG_LEVEL === 'debug' ? ['query', 'info', 'warn'] : [],
 })

@@ -2,19 +2,19 @@
 CREATE EXTENSION IF NOT EXISTS "postgis";
 
 -- CreateEnum
-CREATE TYPE "public"."AuthenticationStatus" AS ENUM ('SUCCESS', 'USER_NOT_EXISTS', 'INCORRECT_PASSWORD', 'RECOVER_PASSWORD', 'INVALID_TOKEN', 'BLOCKED');
+CREATE TYPE "AuthenticationStatus" AS ENUM ('SUCCESS', 'USER_NOT_EXISTS', 'INCORRECT_PASSWORD', 'RECOVER_PASSWORD', 'INVALID_TOKEN', 'BLOCKED');
 
 -- CreateEnum
-CREATE TYPE "public"."UserRole" AS ENUM ('ADMIN', 'DEFAULT');
+CREATE TYPE "UserRole" AS ENUM ('ADMIN', 'DEFAULT');
 
 -- CreateTable
-CREATE TABLE "public"."authentication_audit" (
+CREATE TABLE "authentication_audit" (
     "id" TEXT NOT NULL,
     "ip_address" TEXT,
     "remote_port" TEXT,
     "user_agent" TEXT,
     "origin" TEXT,
-    "status" "public"."AuthenticationStatus" NOT NULL,
+    "status" "AuthenticationStatus" NOT NULL,
     "user_id" INTEGER,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -22,7 +22,7 @@ CREATE TABLE "public"."authentication_audit" (
 );
 
 -- CreateTable
-CREATE TABLE "public"."users" (
+CREATE TABLE "users" (
     "id" SERIAL NOT NULL,
     "public_id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -32,7 +32,7 @@ CREATE TABLE "public"."users" (
     "password_hash" TEXT NOT NULL,
     "login_attempts" INTEGER NOT NULL DEFAULT 0,
     "last_login" TIMESTAMP(3),
-    "role" "public"."UserRole" NOT NULL DEFAULT 'DEFAULT',
+    "role" "UserRole" NOT NULL DEFAULT 'DEFAULT',
     "token" TEXT,
     "token_expires_at" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -43,7 +43,7 @@ CREATE TABLE "public"."users" (
 );
 
 -- CreateTable
-CREATE TABLE "public"."form_submissions" (
+CREATE TABLE "form_submissions" (
     "id" SERIAL NOT NULL,
     "public_id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -58,7 +58,7 @@ CREATE TABLE "public"."form_submissions" (
 );
 
 -- CreateTable
-CREATE TABLE "public"."churches" (
+CREATE TABLE "churches" (
     "id" SERIAL NOT NULL,
     "public_id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -73,37 +73,37 @@ CREATE TABLE "public"."churches" (
 );
 
 -- CreateIndex
-CREATE INDEX "idx_auth_audit_user_date" ON "public"."authentication_audit"("user_id", "created_at");
+CREATE INDEX "idx_auth_audit_user_date" ON "authentication_audit"("user_id", "created_at");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "users_public_id_key" ON "public"."users"("public_id");
+CREATE UNIQUE INDEX "users_public_id_key" ON "users"("public_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "users_username_key" ON "public"."users"("username");
+CREATE UNIQUE INDEX "users_username_key" ON "users"("username");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "users_email_key" ON "public"."users"("email");
+CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "users_cpf_key" ON "public"."users"("cpf");
+CREATE UNIQUE INDEX "users_cpf_key" ON "users"("cpf");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "users_token_key" ON "public"."users"("token");
+CREATE UNIQUE INDEX "users_token_key" ON "users"("token");
 
 -- CreateIndex
-CREATE INDEX "idx_user_name" ON "public"."users"("name");
+CREATE INDEX "idx_user_name" ON "users"("name");
 
 -- CreateIndex
-CREATE INDEX "idx_user_token" ON "public"."users"("token");
+CREATE INDEX "idx_user_token" ON "users"("token");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "form_submissions_public_id_key" ON "public"."form_submissions"("public_id");
+CREATE UNIQUE INDEX "form_submissions_public_id_key" ON "form_submissions"("public_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "churches_public_id_key" ON "public"."churches"("public_id");
+CREATE UNIQUE INDEX "churches_public_id_key" ON "churches"("public_id");
 
 -- AddForeignKey
-ALTER TABLE "public"."authentication_audit" ADD CONSTRAINT "authentication_audit_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION;
+ALTER TABLE "authentication_audit" ADD CONSTRAINT "authentication_audit_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION;
 -- Enable PostGIS (safe & idempotent)
 CREATE EXTENSION IF NOT EXISTS postgis;
 
