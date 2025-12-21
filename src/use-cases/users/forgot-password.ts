@@ -39,7 +39,7 @@ export class ForgotPasswordUseCase {
 
     if (!userExists) throw new UserNotFoundForPasswordResetError()
 
-    const user = await this.usersRepository.update(userExists.id, {
+    const user = await this.usersRepository.update(userExists.publicId, {
       ...tokenData,
     })
 

@@ -13,6 +13,6 @@ export class DeleteUserUseCase {
 
     if (!userExists) throw new ResourceNotFoundError()
 
-    await this.usersRepository.delete(userExists.id)
+    await this.usersRepository.delete(userExists.publicId)
   }
 }

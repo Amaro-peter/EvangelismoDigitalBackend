@@ -8,15 +8,28 @@ import { publicIdSchema } from '@http/schemas/utils/public-id-schema'
 
 export async function updateUser(request: FastifyRequest, reply: FastifyReply) {
   try {
-    const { name, email, password } = updateSchema.parse(request.body)
+    const bodyParse = updateSchema.safeParse(request.body)
+    if (!bodyParse.success) {
+      return reply.status(400).send({
+        message: 'Dados de registro inválidos!',
+      })
+    }
+    const { name, email } = bodyParse.data
+
+    const paramsParse = publicIdSchema.safeParse(request.params)
+    if (!paramsParse.success) {
+      return reply.status(400).send({
+        message: 'Parâmetros inválidos!',
+      })
+    }
+    const { publicId } = paramsParse.data
 
     const updateUserUseCase = makeUpdateUserUseCase()
 
     const { user } = await updateUserUseCase.execute({
-      publicId: request.user.sub,
+      publicId,
       name,
       email,
-      password,
     })
 
     logger.info('User updated successfully!')
@@ -33,8 +46,21 @@ export async function updateUser(request: FastifyRequest, reply: FastifyReply) {
 
 export async function updateUserByPublicId(request: FastifyRequest, reply: FastifyReply) {
   try {
-    const { name, email, password } = updateSchema.parse(request.body)
-    const { publicId } = publicIdSchema.parse(request.params)
+    const bodyParse = updateSchema.safeParse(request.body)
+    if (!bodyParse.success) {
+      return reply.status(400).send({
+        message: 'Dados de registro inválidos!',
+      })
+    }
+    const { name, email } = bodyParse.data
+
+    const paramsParse = publicIdSchema.safeParse(request.params)
+    if (!paramsParse.success) {
+      return reply.status(400).send({
+        message: 'Parâmetros inválidos!',
+      })
+    }
+    const { publicId } = paramsParse.data
 
     const updateUserUseCase = makeUpdateUserUseCase()
 
@@ -42,7 +68,6 @@ export async function updateUserByPublicId(request: FastifyRequest, reply: Fasti
       publicId,
       name,
       email,
-      password,
     })
 
     logger.info('User updated successfully!')
