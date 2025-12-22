@@ -1,8 +1,6 @@
-import { env } from '@env/index'
 import { User } from '@prisma/client'
-import { UserRepository } from '@repositories/users-repository'
+import { UsersRepository } from '@repositories/users-repository'
 import { ResourceNotFoundError } from '@use-cases/errors/resource-not-found-error'
-import { hash } from 'bcryptjs'
 
 interface UpdateUserUseCaseRequest {
   publicId: string
@@ -17,10 +15,10 @@ type UpdateUserUseCaseResponse = {
 }
 
 export class UpdateUserUseCase {
-  constructor(private usersRepository: UserRepository) {}
+  constructor(private usersRepository: UsersRepository) {}
 
   async execute({ publicId, ...data }: UpdateUserUseCaseRequest): Promise<UpdateUserUseCaseResponse> {
-    const userToUpdate = await this.usersRepository.findBy({ publicId })
+    const userToUpdate = await this.usersRepository.findById({ publicId })
 
     if (!userToUpdate) throw new ResourceNotFoundError()
 
