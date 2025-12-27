@@ -1,4 +1,5 @@
-import { ChurchesRepository } from "@repositories/churches-repository";
+import { Prisma } from '@prisma/client'
+import { ChurchesRepository } from '@repositories/churches-repository'
 import { ChurchAlreadyExistsError } from '@use-cases/errors/church-already-exists-error'
 import { CreateChurchError } from '@use-cases/errors/create-church-error'
 
@@ -49,6 +50,10 @@ export class CreateChurchUseCase {
 
       return church
     } catch (err: any) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ChurchAlreadyExistsError()
+      }
+
       if (err.message === 'church-already-exists') {
         throw new ChurchAlreadyExistsError()
       }

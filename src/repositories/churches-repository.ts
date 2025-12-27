@@ -39,7 +39,7 @@ export interface ChurchesRepository {
   findNearest(params: FindNearbyParams): Promise<NearbyChurch[]>
   findByParams(params: ChurchAlreadyExists): Promise<Church | null>
   findByName(name: string): Promise<Church | null>
-  createChurch(data: Prisma.ChurchCreateInput): Promise<Church>
+  createChurch(data: Prisma.ChurchCreateInput): Promise<Church | null>
   deleteChurchByPublicId(publicId: string): Promise<Church | null>
 }
 

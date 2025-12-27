@@ -8,7 +8,7 @@ export async function listUsers(_request: FastifyRequest, reply: FastifyReply) {
 
   const { users } = await listUsers.execute()
 
-  logger.info('Admins retrieved successfully!')
+  logger.info('Users retrieved successfully!')
 
-  return reply.status(200).send({ admins: UserPresenter.toHTTP(users) })
+  return reply.status(200).send({ users: UserPresenter.toHTTP(users) })
 }
