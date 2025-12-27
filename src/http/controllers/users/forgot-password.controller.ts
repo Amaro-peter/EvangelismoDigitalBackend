@@ -10,11 +10,15 @@ import { UserNotFoundForPasswordResetError } from '@use-cases/errors/user-not-fo
 
 export async function forgotPassword(request: FastifyRequest, reply: FastifyReply) {
   try {
-    const { login } = forgotPasswordSchema.parse(request.body)
+    const { email } = forgotPasswordSchema.parse(request.body)
+
+    if (!email) {
+      throw new UserNotFoundForPasswordResetError()
+    }
 
     const forgotPasswordUseCase = makeForgotPasswordUseCase()
 
-    const { user, token } = await forgotPasswordUseCase.execute({ login })
+    const { user, token } = await forgotPasswordUseCase.execute({ email })
 
     const sendEmailUseCase = makeSendEmailUseCase()
 

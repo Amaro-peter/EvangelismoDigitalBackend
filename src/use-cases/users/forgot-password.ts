@@ -23,10 +23,10 @@ export class ForgotPasswordUseCase {
     let userExists: User | null = null
 
     if (emailSchema.safeParse(email).success) {
-      userExists = await this.usersRepository.findByEmail(email)
-    } else {
-      userExists = await this.usersRepository.findByEmail(email)
+      userExists = await this.usersRepository.findBy({ email: email! })
     }
+
+    if (!userExists) throw new UserNotFoundForPasswordResetError()
 
     const passwordToken = randomBytes(TOKEN_LENGTH).toString('hex')
 
@@ -37,9 +37,7 @@ export class ForgotPasswordUseCase {
       tokenExpiresAt: tokenExpiresAt,
     }
 
-    if (!userExists) throw new UserNotFoundForPasswordResetError()
-
-    const user = await this.usersRepository.update(userExists.publicId, {
+    const user = await this.usersRepository.updatePassword(userExists.publicId, {
       ...tokenData,
     })
 

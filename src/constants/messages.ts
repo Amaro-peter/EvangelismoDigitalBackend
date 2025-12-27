@@ -1,3 +1,5 @@
+import { create } from 'axios'
+
 export const messages = {
   validation: {
     invalidData: 'Dados de registro inválidos!',
@@ -26,6 +28,7 @@ export const messages = {
     passwordChangeRequired: 'É necessário alterar a senha antes de acessar o sistema!',
     formSubmissionFailed: 'Falha ao enviar o formulário.',
     createChurchFailed: 'Falha ao criar a igreja.',
+    createUserFailed: 'Falha ao criar o usuário.',
   },
   info: {
     passwordResetGeneric: 'Se o usuário existir, você receberá um e-mail com instruções para redefinir a senha.',

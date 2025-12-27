@@ -1,8 +1,9 @@
 import { UserAlreadyExistsError } from '@use-cases/errors/user-already-exists-error'
-import { Prisma, User, UserRole } from '@prisma/client'
+import { Prisma, User } from '@prisma/client'
 import { hash } from 'bcryptjs'
 import { env } from '@env/index'
-import { UsersRepository } from '@repositories/users-repository'
+import { UserRole, UsersRepository } from '@repositories/users-repository'
+import { UserNotCreatedError } from '@use-cases/errors/user-not-created-error'
 
 interface RegisterUserUseCaseRequest {
   name: string
@@ -39,6 +40,10 @@ export class RegisterUserUseCase {
         passwordHash,
         role,
       })
+
+      if (!user) {
+        throw new UserNotCreatedError()
+      }
 
       return { user }
     } catch (error) {
