@@ -17,13 +17,13 @@ export class ResetPasswordUseCase {
   constructor(private readonly usersRepository: UsersRepository) {}
 
   async execute({ token, password }: ResetPasswordUseCaseCaseRequest): Promise<ResetPasswordUseCaseCaseResponse> {
-    const passwordHash = await hash(password, env.HASH_SALT_ROUNDS)
-
     const userExists = await this.usersRepository.findByToken({ token: token })
 
     if (!userExists || !userExists.tokenExpiresAt || userExists.tokenExpiresAt < new Date()) {
       throw new InvalidTokenError()
     }
+
+    const passwordHash = await hash(password, env.HASH_SALT_ROUNDS)
 
     const user = await this.usersRepository.updatePassword(userExists.publicId, {
       passwordHash: passwordHash,
