@@ -17,6 +17,7 @@
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "test": "vitest run --project unit",
+    "test:unit:users": "vitest run --project unit src/use-cases/users",
     "test:e2e": "vitest run --project e2e",
     "test:watch": "vitest --project unit",
     "test:e2e:watch": "vitest --project e2e",
