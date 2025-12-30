@@ -33,6 +33,20 @@ export default defineConfig(({ mode }) => {
         {
           extends: true,
           test: {
+            name: 'messaging',
+            dir: 'src/use-cases/messaging',
+          },
+        },
+        {
+          extends: true,
+          test: {
+            name: 'forms',
+            dir: 'src/use-cases/forms',
+          },
+        },
+        {
+          extends: true,
+          test: {
             name: 'e2e',
             dir: 'src/http/controllers',
             environment: './prisma/vitest-environment-prisma/prisma-test-environment.ts',
