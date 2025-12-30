@@ -17,19 +17,23 @@ export async function updateUser(request: FastifyRequest, reply: FastifyReply) {
     }
     const { name, username, email } = bodyParse.data
 
-    let publicId: string
-    const paramsParse = publicIdSchema.safeParse(request.params)
-    if (paramsParse.success) {
-      publicId = paramsParse.data.publicId
-    } else {
-      const authUser = request.user as any
-      publicId = authUser?.publicId ?? authUser?.sub
-      const fallbackValid = publicIdSchema.safeParse({ publicId })
-      if (!fallbackValid.success) {
-        return reply.status(400).send({
-          messages: 'Parâmetros inválidos!',
-        })
-      }
+    const authUser = request.user as { publicId?: string; sub?: string }
+
+    const publicId = authUser?.publicId ?? authUser?.sub
+
+    if (!publicId) {
+      return reply.status(401).send({ message: messages.errors.unauthorized ?? 'Unauthorized' })
+    }
+
+    if (!publicId) {
+      return reply.status(401).send({ message: messages.errors.unauthorized ?? 'Unauthorized' })
+    }
+
+    const fallbackValid = publicIdSchema.safeParse({ publicId })
+    if (!fallbackValid.success) {
+      return reply.status(400).send({
+        message: 'Parâmetros inválidos!',
+      })
     }
 
     const updateUserUseCase = makeUpdateUserUseCase()

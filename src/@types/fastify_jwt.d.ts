@@ -1,12 +1,12 @@
 import '@fastify/jwt'
-import { UserRole } from '@prisma/client'
+import { UserRole } from '@repositories/users-repository'
 
 declare module '@fastify/jwt' {
   export interface FastifyJWT {
     user: {
       sub: string
       role: UserRole
-      publicId?: string
+      publicId?: string | undefined
     }
   }
 }

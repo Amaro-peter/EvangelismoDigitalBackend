@@ -1,10 +1,11 @@
 import { messages } from '@constants/messages'
-import { UserRole } from '@prisma/client'
+import { FastifyJWT } from '@fastify/jwt'
+import { UserRole } from '@repositories/users-repository'
 import { FastifyReply, FastifyRequest } from 'fastify'
 
-export function verifyUserOrAdmin(paramName = 'publicId') {
+export function verifyUserOrAdmin(paramName?: string) {
   return async (request: FastifyRequest, reply: FastifyReply) => {
-    const authUser = request.user as any
+    const authUser = request.user as FastifyJWT['user']
 
     if (!authUser) {
       return reply.status(401).send({ message: messages.errors.unauthorized ?? 'Unauthorized' })
@@ -14,16 +15,23 @@ export function verifyUserOrAdmin(paramName = 'publicId') {
       return
     }
 
-    const target = (request.params as any)?.[paramName]
-
-    if(!target) {
+    if (!paramName) {
       return
     }
 
-    const userIdCandidates = [authUser.sub, authUser.publicId].filter(Boolean)
+    const params = request.params as Record<string, unknown>
+    const target = params?.[paramName]
 
-    if (!userIdCandidates.includes(target)) {
+    if (typeof target !== 'string') {
       return reply.status(403).send({ message: messages.errors.forbidden ?? 'Forbidden' })
     }
+
+    const ownsResource = target === authUser.publicId
+
+    if (!ownsResource) {
+      return reply.status(403).send({ message: messages.errors.forbidden ?? 'Forbidden' })
+    }
+
+    return
   }
 }

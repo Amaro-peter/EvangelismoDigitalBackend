@@ -9,7 +9,11 @@ export async function getUserProfile(request: FastifyRequest, reply: FastifyRepl
   try {
     const getUserProfileUseCase = makeGetUserProfileUseCase()
 
-    const { user } = await getUserProfileUseCase.execute({ publicId: request.user.sub })
+    const data = { publicId: String((request.user as any)?.sub) }
+
+    const { publicId } = publicIdSchema.parse(data)
+
+    const { user } = await getUserProfileUseCase.execute({ publicId })
 
     logger.info('User profile retrieved successfully!')
 
