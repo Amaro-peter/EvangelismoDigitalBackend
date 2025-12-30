@@ -37,10 +37,31 @@ export async function usersRoutes(app: FastifyInstance) {
   app.post('/forgot-password', { config: { rateLimit: { max: 100, timeWindow: '1 hour' } } }, forgotPassword)
   app.patch('/reset-password', { config: { rateLimit: { max: 200, timeWindow: '1 hour' } } }, resetPassword)
 
-  // User routes:
-  app.patch('/me', { onRequest: [verifyJwt, verifyUserOrAdmin()] }, updateUser)
-  app.get('/me', { onRequest: [verifyJwt, verifyUserOrAdmin()] }, getUserProfile)
-  app.delete('/me', { onRequest: [verifyJwt, verifyUserOrAdmin()] }, deleteUser)
+  // User profile routes
+  app.patch(
+    '/me',
+    {
+      onRequest: [verifyJwt],
+      preHandler: [verifyUserOrAdmin()],
+    },
+    updateUser,
+  )
+  app.get(
+    '/me',
+    {
+      onRequest: [verifyJwt],
+      preHandler: [verifyUserOrAdmin()],
+    },
+    getUserProfile,
+  )
+  app.delete(
+    '/me',
+    {
+      onRequest: [verifyJwt],
+      preHandler: [verifyUserOrAdmin()],
+    },
+    deleteUser,
+  )
 
   // List users route:
   app.get(

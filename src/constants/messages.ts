@@ -3,7 +3,7 @@ import { create } from 'axios'
 export const messages = {
   validation: {
     invalidData: 'Dados de registro inválidos!',
-    userAlreadyExists: 'Já existe um usuário cadastrado com este CPF ou E-mail',
+    userAlreadyExists: 'Já existe um usuário cadastrado com este CPF, E-mail ou Nome de Usuário.',
     churchAlreadyExists: 'Já existe uma igreja cadastrada com este nome e/ou coordenadas',
     invalidCpf: 'CPF inválido!',
     invalidJson: 'O corpo da requisição não está em formato JSON válido. Verifique a estrutura dos dados enviados.',

@@ -27,11 +27,15 @@ export class AuthenticateUserUseCase {
       user = await this.usersRepository.findBy({ username: login })
     }
 
+    if (!user) {
+      throw new InvalidCredentialsError()
+    }
+
     const hashToCompare = user?.passwordHash || DUMMY_HASH
 
     const doesPasswordMatch = await compare(password, hashToCompare)
 
-    if (!user || !doesPasswordMatch) throw new InvalidCredentialsError()
+    if (!doesPasswordMatch) throw new InvalidCredentialsError()
 
     return { user }
   }

@@ -136,5 +136,5 @@ app.setErrorHandler((error, _request, reply) => {
     logger.error('Unhandled error occurred')
   }
 
-  reply.status(500).send({ message: messages.errors.internalServer })
+  reply.status(500).send({ message: messages.errors.internalServer, error: error.message })
 })

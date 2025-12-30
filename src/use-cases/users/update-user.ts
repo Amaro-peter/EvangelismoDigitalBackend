@@ -1,6 +1,7 @@
 import { User } from '@prisma/client'
 import { UsersRepository, UserUpdateInput } from '@repositories/users-repository'
 import { ResourceNotFoundError } from '@use-cases/errors/resource-not-found-error'
+import { UserAlreadyExistsError } from '@use-cases/errors/user-already-exists-error'
 
 interface UpdateUserUseCaseRequest {
   publicId: string
@@ -26,6 +27,18 @@ export class UpdateUserUseCase {
     if (email) data.email = email
     if (username) data.username = username
     data.updatedAt = new Date()
+
+    const userWithExistingEmail = await this.usersRepository.findBy({ email })
+
+    if (userWithExistingEmail && userWithExistingEmail.publicId !== userToBeUpdated.publicId) {
+      throw new UserAlreadyExistsError()
+    }
+
+    const usernameWithExistingUsername = await this.usersRepository.findBy({ username })
+
+    if (usernameWithExistingUsername && usernameWithExistingUsername.publicId !== userToBeUpdated.publicId) {
+      throw new UserAlreadyExistsError()
+    }
 
     const user = await this.usersRepository.update(userToBeUpdated.publicId, {
       ...data,
