@@ -22,6 +22,7 @@ export const messages = {
     resourceNotFound: 'Recurso não encontrado!',
     coordinatesNotFound: 'Coordenadas não encontradas para o endereço fornecido.',
     churchNotFound: 'Igreja não encontrada.',
+    noAddressProvided: 'Nenhum endereço fornecido para conversão de CEP.',
     forbidden: 'Acesso negado!',
     unauthorized: 'Não autorizado!',
     invalidToken: 'Token inválido ou expirado!',

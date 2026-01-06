@@ -88,7 +88,7 @@ model Church {
   id        Int                                    @id @default(autoincrement())
   publicId  String                                 @unique @default(uuid(7)) @map("public_id")
   name      String
-  address   String?
+  address   String
   lat       Float
   lon       Float
   geog      Unsupported("geography(Point, 4326)")?

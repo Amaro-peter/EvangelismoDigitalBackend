@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client'
 import { ChurchesRepository } from '@repositories/churches-repository'
 import { ChurchAlreadyExistsError } from '@use-cases/errors/church-already-exists-error'
 import { CreateChurchError } from '@use-cases/errors/create-church-error'
+import { NoAddressError } from '@use-cases/errors/no-address-error'
 
 interface CreateChurchUseCaseRequest {
   name: string
@@ -14,7 +15,7 @@ interface CreateChurchUseCaseResponse {
   id: number
   publicId: string
   name: string
-  address: string | null
+  address: string
   lat: number
   lon: number
   geog?: unknown | null
@@ -26,6 +27,16 @@ export class CreateChurchUseCase {
   constructor(private churchesRepository: ChurchesRepository) {}
 
   async execute({ name, address, lat, lon }: CreateChurchUseCaseRequest): Promise<CreateChurchUseCaseResponse> {
+    if (!address || address.trim() === '') {
+      throw new NoAddressError()
+    }
+
+    const churchWithSameName = await this.churchesRepository.findByName(name)
+
+    if (churchWithSameName !== null) {
+      throw new ChurchAlreadyExistsError()
+    }
+
     const churchAlreadyExists = await this.churchesRepository.findByParams({
       name,
       lat,

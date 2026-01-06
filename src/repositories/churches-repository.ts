@@ -1,5 +1,3 @@
-import { Prisma } from "@prisma/client"
-
 export interface ChurchAlreadyExists {
   name: string
   lat: number
@@ -8,6 +6,7 @@ export interface ChurchAlreadyExists {
 
 export interface NearbyChurch {
   id: number
+  publicId: string
   name: string
   address: string | null
   lat: number
@@ -27,7 +26,7 @@ export interface Church {
   id: number
   publicId: string
   name: string
-  address: string | null
+  address: string
   lat: number
   lon: number
   geog?: unknown | null
@@ -39,7 +38,6 @@ export interface ChurchesRepository {
   findNearest(params: FindNearbyParams): Promise<NearbyChurch[]>
   findByParams(params: ChurchAlreadyExists): Promise<Church | null>
   findByName(name: string): Promise<Church | null>
-  createChurch(data: Prisma.ChurchCreateInput): Promise<Church | null>
+  createChurch(data: Omit<Church, 'id' | 'publicId' | 'createdAt' | 'updatedAt' | 'geog'>): Promise<Church | null>
   deleteChurchByPublicId(publicId: string): Promise<Church | null>
 }
-
