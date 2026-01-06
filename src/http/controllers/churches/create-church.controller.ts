@@ -1,4 +1,5 @@
 import { createChurchBodySchema } from '@http/schemas/churches/create-church-schema'
+import { ChurchPresenter } from '@http/presenters/church-presenter'
 import { logger } from '@lib/logger'
 import { ChurchAlreadyExistsError } from '@use-cases/errors/church-already-exists-error'
 import { CreateChurchError } from '@use-cases/errors/create-church-error'
@@ -22,43 +23,14 @@ export async function createChurch(request: FastifyRequest, reply: FastifyReply)
       lon,
     })
 
-    const removeId = (obj: Record<string, any>) => {
-      if (!obj || typeof obj !== 'object') return obj
-      const { id, ...rest } = obj
-      return rest
-    }
-
-    let sanitizedChurch: any
-
-    if (Array.isArray(church)) {
-      sanitizedChurch = church.map(removeId)
-    } else if (church && typeof church === 'object' && '0' in church) {
-      sanitizedChurch = Object.fromEntries(
-        Object.entries(church).map(([k, v]) => [
-          k,
-          v && typeof v === 'object' ? removeId(v as Record<string, any>) : v,
-        ]),
-      )
-    } else {
-      sanitizedChurch = removeId(church as Record<string, any>)
-    }
+    const sanitizedChurch = ChurchPresenter.toHTTP(church)
 
     logger.info({
       msg: 'Igreja criada com sucesso',
       church: sanitizedChurch,
-      ...(sanitizedChurch && !Array.isArray(sanitizedChurch) && typeof sanitizedChurch === 'object'
-        ? {
-            publicId: sanitizedChurch.publicId,
-            name: sanitizedChurch.name,
-            address: sanitizedChurch.address,
-            lat: sanitizedChurch.lat,
-            lon: sanitizedChurch.lon,
-            geog: sanitizedChurch.geog,
-          }
-        : {}),
     })
 
-    return reply.status(201).send({ sanitizedChurch })
+    return reply.status(201).send({ church: sanitizedChurch })
   } catch (error) {
     if (error instanceof ChurchAlreadyExistsError) {
       logger.warn({

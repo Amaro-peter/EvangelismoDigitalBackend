@@ -182,7 +182,7 @@ export class PrismaChurchesRepository implements ChurchesRepository {
     return results[0] ?? null
   }
 
-  async createChurch(data: Prisma.ChurchCreateInput): Promise<Church> {
+  async createChurch(data: Omit<Church, 'id' | 'publicId' | 'createdAt' | 'updatedAt' | 'geog'>): Promise<Church> {
     try {
       const church: Church = await prisma.$queryRaw<Church>`
         INSERT INTO churches (public_id, name, address, lat, lon, created_at, updated_at)

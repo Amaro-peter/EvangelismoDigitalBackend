@@ -1,4 +1,5 @@
 import { cepSchema } from '@http/schemas/utils/cep'
+import { ChurchPresenter } from '@http/presenters/church-presenter'
 import { logger } from '@lib/logger'
 import { LatitudeRangeError } from '@use-cases/errors/latitude-range-error'
 import { LongitudeRangeError } from '@use-cases/errors/longitude-range-error'
@@ -45,10 +46,9 @@ export async function findNearestChurches(
       })
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const churchesWithoutId = churches.map(({ id, ...church }) => church)
+    const sanitizedChurches = ChurchPresenter.toHTTP(churches)
 
-    return reply.status(200).send({ churches: churchesWithoutId, totalFound })
+    return reply.status(200).send({ churches: sanitizedChurches, totalFound })
   } catch (error) {
     if (error instanceof LatitudeRangeError || error instanceof LongitudeRangeError) {
       logger.warn({

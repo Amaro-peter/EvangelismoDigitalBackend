@@ -62,7 +62,7 @@ CREATE TABLE "churches" (
     "id" SERIAL NOT NULL,
     "public_id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "address" TEXT,
+    "address" TEXT NOT NULL,
     "lat" DOUBLE PRECISION NOT NULL,
     "lon" DOUBLE PRECISION NOT NULL,
     "geog" geography(Point, 4326),
