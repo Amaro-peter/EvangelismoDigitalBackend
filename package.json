@@ -17,6 +17,7 @@
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "test:unit": "vitest run --project unit",
+    "test:unit:churches": "vitest run --project unit src/use-cases/churches",
     "test:unit:users": "vitest run --project unit src/use-cases/users",
     "test:unit:messaging": "vitest run --project unit src/use-cases/messaging",
     "test:unit:forms": "vitest run --project unit src/use-cases/forms",
