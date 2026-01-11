@@ -26,6 +26,13 @@ export default defineConfig(({ mode }) => {
         {
           extends: true,
           test: {
+            name: 'churches',
+            dir: 'src/use-cases/churches',
+          },
+        },
+        {
+          extends: true,
+          test: {
             name: 'users',
             dir: 'src/use-cases/users',
           },
