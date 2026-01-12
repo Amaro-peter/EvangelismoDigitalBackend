@@ -1,6 +1,6 @@
 import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-found-error'
-import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
-import axios from 'axios'
+import { AddressProvider } from 'providers/address-provider/address-provider.interface'
+import { GeocodingProvider } from 'providers/geo-provider/geo-provider.interface'
 
 interface CepToLatLonRequest {
   cep: string
@@ -12,38 +12,47 @@ interface CepToLatLonResponse {
 }
 
 export class CepToLatLonUseCase {
-  async execute({ cep }: CepToLatLonRequest): Promise<CepToLatLonResponse> {
-    const viaCepRes = await axios.get(`https://viacep.com.br/ws/${cep}/json/`)
+  constructor(
+    private geocodingProvider: GeocodingProvider,
+    private viaCepProvider: AddressProvider,
+  ) {}
 
-    if (viaCepRes.data.erro) {
-      throw new InvalidCepError()
+  async execute({ cep }: CepToLatLonRequest): Promise<CepToLatLonResponse> {
+    // 1. FETCH ADDRESS INFO (ViaCEP)
+    const addressData = await this.viaCepProvider.fetchAddress(cep)
+
+    const { logradouro, localidade, uf, bairro } = addressData
+
+    let coordinates: { lat: number; lon: number } | null = null
+
+    // STRATEGY 1: SMART FREE-TEXT SEARCH (Best precision)
+    if (logradouro) {
+      const fullAddress = `${logradouro}, ${localidade} - ${uf}, Brazil`
+      coordinates = await this.geocodingProvider.search(fullAddress)
     }
 
-    const { logradouro, localidade, uf } = viaCepRes.data
-    const address = `${logradouro}, ${localidade} - ${uf}, Brazil`
+    // STRATEGY 2: NEIGHBORHOOD FALLBACK (If street not found)
+    if (!coordinates && bairro) {
+      const neighborhoodAddress = `${bairro}, ${localidade} - ${uf}, Brazil`
+      coordinates = await this.geocodingProvider.search(neighborhoodAddress)
+    }
 
-    const geoRes = await axios.get('https://nominatim.openstreetmap.org/search', {
-      params: {
-        q: address,
-        format: 'jsonv2', // jsonv2 provides slightly more detail
-        limit: 1,
-        addressdetails: 1,
-      },
-      headers: {
-        'User-Agent': 'EvangelismoDigitalBackend/1.0 (contact@findhope.digital)',
-      },
-    })
+    // STRATEGY 3: CITY FALLBACK (Last Resort)
+    if (!coordinates) {
+      coordinates = await this.geocodingProvider.searchStructured({
+        city: localidade,
+        state: uf,
+        country: 'Brazil',
+      })
+    }
 
-    if (!geoRes.data || geoRes.data.length === 0) {
+    if (!coordinates) {
       throw new CoordinatesNotFoundError()
     }
 
-    const rawLat = geoRes.data[0].lat
-    const rawLon = geoRes.data[0].lon
-
     return {
-      userLat: Number.parseFloat(rawLat),
-      userLon: Number.parseFloat(rawLon),
+      userLat: coordinates.lat,
+      userLon: coordinates.lon,
     }
   }
 }
