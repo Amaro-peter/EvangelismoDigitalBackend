@@ -1,11 +1,12 @@
-
 export interface AddressData {
-    logradouro?: string;
-    bairro?: string;
-    localidade: string;
-    uf: string;
+  logradouro?: string
+  bairro?: string
+  localidade: string
+  uf: string
+  lat?: number
+  lon?: number
 }
 
 export interface AddressProvider {
-    fetchAddress(cep: string): Promise<AddressData>
+  fetchAddress(cep: string): Promise<AddressData>
 }

@@ -1,15 +1,11 @@
 import axios, { AxiosError, AxiosInstance } from 'axios'
 import https from 'https'
-import { Redis } from 'ioredis'
 import { AddressData, AddressProvider } from './address-provider.interface'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 import { logger } from '@lib/logger'
 
 export class ViaCepProvider implements AddressProvider {
   private static api: AxiosInstance
-  private readonly redis: Redis
-  private readonly CACHE_TTL_SECONDS = 60 * 60 * 24 * 90 // 90 days
-  private readonly CACHE_PREFIX = 'cache:viacep:'
 
   private readonly MAX_RETRIES = 2
   private readonly BACKOFF_MS = 300
@@ -20,9 +16,7 @@ export class ViaCepProvider implements AddressProvider {
   private readonly MAX_FREE_SOCKETS = 2
   private readonly HTTPS_AGENT_TIMEOUT = 60000
 
-  constructor(redisConnection: Redis) {
-    this.redis = redisConnection
-
+  constructor() {
     if (!ViaCepProvider.api) {
       const httpsAgent = new https.Agent({
         keepAlive: this.KEEP_ALIVE,
@@ -45,20 +39,7 @@ export class ViaCepProvider implements AddressProvider {
 
   async fetchAddress(cep: string): Promise<AddressData> {
     const cleanCep = cep.replace(/\D/g, '')
-    const cacheKey = `${this.CACHE_PREFIX}${cleanCep}`
 
-    // 1. Try Cache
-    try {
-      const cached = await this.redis.get(cacheKey)
-      if (cached) {
-        logger.info({ cep: cleanCep }, 'Address fetched from Redis cache')
-        return JSON.parse(cached) as AddressData
-      }
-    } catch (err) {
-      logger.error({ error: err }, 'Redis error during ViaCEP cache read')
-    }
-
-    // 2. Fetch from API
     for (let attempt = 0; attempt <= this.MAX_RETRIES; attempt++) {
       try {
         const response = await ViaCepProvider.api.get(`/${cleanCep}/json/`)
@@ -75,13 +56,6 @@ export class ViaCepProvider implements AddressProvider {
         const addressData: AddressData = { logradouro, bairro, localidade, uf }
 
         logger.info({ cep: cleanCep, attempt }, 'Endereço obtido com sucesso da API ViaCEP')
-
-        // 3. Save to Cache
-        try {
-          await this.redis.set(cacheKey, JSON.stringify(addressData), 'EX', this.CACHE_TTL_SECONDS)
-        } catch (err) {
-          logger.error({ error: err }, 'Redis error during ViaCEP cache write')
-        }
 
         return addressData
       } catch (error) {
