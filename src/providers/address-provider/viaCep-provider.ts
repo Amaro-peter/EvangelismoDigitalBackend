@@ -4,6 +4,10 @@ import { AddressData, AddressProvider } from './address-provider.interface'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 import { logger } from '@lib/logger'
 
+export interface ViaCepConfig {
+  apiUrl: string
+}
+
 export class ViaCepProvider implements AddressProvider {
   private static api: AxiosInstance
 
@@ -16,7 +20,7 @@ export class ViaCepProvider implements AddressProvider {
   private readonly MAX_FREE_SOCKETS = 2
   private readonly HTTPS_AGENT_TIMEOUT = 60000
 
-  constructor() {
+  constructor(private readonly config: ViaCepConfig) {
     if (!ViaCepProvider.api) {
       const httpsAgent = new https.Agent({
         keepAlive: this.KEEP_ALIVE,
@@ -27,7 +31,7 @@ export class ViaCepProvider implements AddressProvider {
       })
 
       ViaCepProvider.api = axios.create({
-        baseURL: process.env.VIACEP_API_URL,
+        baseURL: this.config.apiUrl,
         timeout: this.VIACEP_TIMEOUT,
         headers: {
           'User-Agent': 'EvangelismoDigitalBackend/1.0 (contact@findhope.digital)',
@@ -44,7 +48,6 @@ export class ViaCepProvider implements AddressProvider {
       try {
         const response = await ViaCepProvider.api.get(`/${cleanCep}/json/`)
 
-        // Robust error checking for boolean or string "true"
         const hasError = response.data?.erro === true || response.data?.erro === 'true'
 
         if (hasError) {

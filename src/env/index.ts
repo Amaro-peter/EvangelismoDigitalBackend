@@ -31,6 +31,12 @@ const envSchema = z.object({
 
   // ADMIN EMAIL
   ADMIN_EMAIL: z.email(),
+
+  // External APIs (Geocoding & Address)
+  AWESOME_API_URL: z.string().url(),
+  AWESOME_API_TOKEN: z.string().min(1),
+  VIACEP_API_URL: z.string().url(),
+  GEOCODING_API_URL: z.string().url(),
 })
 
 const _env = envSchema.safeParse(process.env)
