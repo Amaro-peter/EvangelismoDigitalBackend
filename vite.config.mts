@@ -3,8 +3,6 @@ import { loadEnv } from 'vite'
 import tsconfigPaths from 'vite-tsconfig-paths'
 
 export default defineConfig(({ mode }) => {
-  // Carrega as variáveis de ambiente baseadas no modo (ex: 'test')
-  // O terceiro parâmetro '' diz para carregar TODAS as variáveis, não só as que começam com VITE_
   const env = loadEnv(mode, process.cwd(), '')
 
   return {
@@ -13,42 +11,48 @@ export default defineConfig(({ mode }) => {
       globals: true,
       dir: 'src',
       environment: 'node',
-      // Injeta as variáveis carregadas no ambiente do teste
       env: env,
       projects: [
         {
           extends: true,
           test: {
-            name: 'unit',
+            name: 'unit-use-cases',
             dir: 'src/use-cases',
           },
         },
         {
           extends: true,
           test: {
-            name: 'churches',
+            name: 'unit-churches',
             dir: 'src/use-cases/churches',
           },
         },
         {
           extends: true,
           test: {
-            name: 'users',
+            name: 'unit-users',
             dir: 'src/use-cases/users',
           },
         },
         {
           extends: true,
           test: {
-            name: 'messaging',
+            name: 'unit-messaging',
             dir: 'src/use-cases/messaging',
           },
         },
         {
           extends: true,
           test: {
-            name: 'forms',
+            name: 'unit-forms',
             dir: 'src/use-cases/forms',
+          },
+        },
+        {
+          extends: true,
+          test: {
+            name: 'unit-geo-provider',
+            dir: 'src/providers/geo-provider',
           },
         },
         {
@@ -56,13 +60,24 @@ export default defineConfig(({ mode }) => {
           test: {
             name: 'e2e',
             dir: 'src/http/controllers',
+            exclude: ['**/geo-real-fallback.spec.ts'],
+            // Uses isolated schemas for each test run
             environment: './prisma/vitest-environment-prisma/prisma-test-environment.ts',
           },
         },
         {
           extends: true,
           test: {
-            name: 'users',
+            name: 'e2e-geo-fallback',
+            include: ['**/geo-real-fallback.spec.ts'],
+            // Uses Docker database with public schema (no isolation)
+            environment: './prisma/vitest-environment-prisma/prisma-docker-environment.ts',
+          },
+        },
+        {
+          extends: true,
+          test: {
+            name: 'e2e-users',
             dir: 'src/http/controllers/users',
             environment: './prisma/vitest-environment-prisma/prisma-test-environment.ts',
           },

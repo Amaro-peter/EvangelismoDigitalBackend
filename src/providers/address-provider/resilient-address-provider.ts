@@ -28,7 +28,8 @@ export class ResilientAddressProvider implements AddressProvider {
     }
 
     // 2. Tentar Providers em Ordem (Fallback Strategy)
-    let lastError: any = new Error('Nenhum provedor de endereço configurado')
+    let lastError: Error | null = null
+    let invalidCepCount = 0
 
     for (const provider of this.providers) {
       const providerName = provider.constructor.name
@@ -39,25 +40,38 @@ export class ResilientAddressProvider implements AddressProvider {
         this.saveToCache(cacheKey, result)
         return result
       } catch (error) {
-        lastError = error
+        lastError = error as Error
 
-        // Se for erro de CEP Inválido (não existe), não adianta tentar outros providers geralmente,
-        // mas em caso de inconsistência entre bases, pode valer a pena continuar.
-        // Aqui optamos por logar e tentar o próximo.
+        // Se for erro de CEP Inválido, contar quantos providers confirmaram isso
+        if (error instanceof InvalidCepError) {
+          invalidCepCount++
+          logger.warn({ cep: cleanCep, provider: providerName, invalidCepCount }, 'Provedor confirmou CEP inválido')
+          // Se todos os providers confirmaram que o CEP é inválido, lançar erro imediatamente
+          if (invalidCepCount >= this.providers.length) {
+            logger.error({ cep: cleanCep }, 'CEP inválido confirmado por todos os provedores')
+            throw new InvalidCepError()
+          }
+          continue // Tenta próximo provider
+        }
+
+        // Para outros erros (downtime, rate limit, etc.), logar e tentar próximo
         logger.warn(
-          { cep: cleanCep, provider: providerName, error: (error as Error).message },
+          { cep: cleanCep, provider: providerName, error: lastError.message },
           'Falha no provedor de endereço, tentando próximo...',
         )
       }
     }
 
     // Se chegou aqui, todos falharam
-    if (lastError instanceof InvalidCepError) {
-      throw lastError
+    // Se pelo menos um confirmou InvalidCep, lançar InvalidCepError
+    if (invalidCepCount > 0) {
+      logger.error({ cep: cleanCep, invalidCepCount }, 'CEP inválido (confirmado por alguns provedores)')
+      throw new InvalidCepError()
     }
 
+    // Caso contrário, lançar o último erro encontrado
     logger.error({ cep: cleanCep }, 'Todos os provedores de endereço falharam')
-    throw lastError
+    throw lastError || new Error('Nenhum provedor de endereço configurado')
   }
 
   private async saveToCache(key: string, data: AddressData) {

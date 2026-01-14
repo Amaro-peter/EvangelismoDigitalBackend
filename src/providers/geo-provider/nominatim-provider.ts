@@ -1,9 +1,8 @@
 import axios, { AxiosError, AxiosInstance } from 'axios'
-import crypto from 'crypto'
 import https from 'https'
 import { Redis } from 'ioredis'
 import { GeocodingProvider, GeoCoordinates, GeoSearchOptions, GeoPrecision } from './geo-provider.interface'
-import { logger } from '@lib/logger'
+import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 
 export interface NominatimConfig {
   apiUrl: string
@@ -11,35 +10,18 @@ export interface NominatimConfig {
 
 type NominatimSearchParams = Record<string, string | number | undefined>
 
-type NominatimSearchItem = {
-  lat: string
-  lon: string
-  type: string
-  class: string
-  addresstype?: string
-  place_rank?: number
-}
-
-type NominatimSearchResponse = NominatimSearchItem[]
-
 export class NominatimGeoProvider implements GeocodingProvider {
   private static api: AxiosInstance
   private readonly redis: Redis
 
-  // ... [Cache & Rate Limit Settings remain unchanged] ...
-  private readonly CACHE_TTL_SECONDS = 60 * 60 * 24 * 90
-  private readonly CACHE_PREFIX = 'cache:nominatim:'
+  // Rate Limiting ONLY (No Cache)
   private readonly RATE_LIMIT_KEY = 'ratelimit:nominatim'
   private readonly RATE_LIMIT_LOCK_TTL_MS = 1000
+  private readonly MAX_WAIT_FOR_LOCK_MS = 3000
 
-  // HTTP Settings
   private readonly MAX_RETRIES = 2
   private readonly BACKOFF_MS = 300
   private readonly NOMINATIM_TIMEOUT = 4000
-  private readonly KEEP_ALIVE = true
-  private readonly KEEP_ALIVE_MSECS = 1000
-  private readonly MAX_SOCKETS = 1
-  private readonly MAX_FREE_SOCKETS = 1
   private readonly HTTPS_AGENT_TIMEOUT = 60000
 
   constructor(
@@ -50,10 +32,10 @@ export class NominatimGeoProvider implements GeocodingProvider {
 
     if (!NominatimGeoProvider.api) {
       const httpsAgent = new https.Agent({
-        keepAlive: this.KEEP_ALIVE,
-        keepAliveMsecs: this.KEEP_ALIVE_MSECS,
-        maxSockets: this.MAX_SOCKETS,
-        maxFreeSockets: this.MAX_FREE_SOCKETS,
+        keepAlive: true,
+        keepAliveMsecs: 1000,
+        maxSockets: 1,
+        maxFreeSockets: 1,
         timeout: this.HTTPS_AGENT_TIMEOUT,
       })
 
@@ -67,8 +49,6 @@ export class NominatimGeoProvider implements GeocodingProvider {
       })
     }
   }
-
-  // ... [Rest of the methods: search, performRequest, waitForRateLimit, etc. remain unchanged] ...
 
   async search(query: string): Promise<GeoCoordinates | null> {
     return this.performRequest({ q: query })
@@ -85,8 +65,6 @@ export class NominatimGeoProvider implements GeocodingProvider {
   }
 
   private async performRequest(params: NominatimSearchParams): Promise<GeoCoordinates | null> {
-    // ... [Implementation unchanged] ...
-    // (Included for brevity, assume full implementation matches previous file)
     const finalParams = this.cleanParams({
       ...params,
       format: 'jsonv2',
@@ -94,73 +72,62 @@ export class NominatimGeoProvider implements GeocodingProvider {
       addressdetails: 1,
     })
 
-    const cacheKey = this.generateCacheKey(finalParams)
-    try {
-      const cached = await this.redis.get(cacheKey)
-      if (cached) {
-        logger.info('Geocoding result fetched from Redis cache')
-        return JSON.parse(cached)
-      }
-    } catch (err) {
-      logger.error({ error: err }, 'Redis error during Nominatim cache read')
-    }
-
+    // 1. Rate Limiting
     await this.waitForRateLimit()
 
+    // 2. Request with Retries
     for (let attempt = 0; attempt <= this.MAX_RETRIES; attempt++) {
       try {
-        const result = await NominatimGeoProvider.api.get<NominatimSearchResponse>('/search', {
+        const result = await NominatimGeoProvider.api.get<any[]>('/search', {
           params: finalParams,
         })
 
         const first = result.data?.[0]
-        if (!first) {
-          logger.info('Nenhum resultado encontrado na geocodificação')
-          return null
-        }
+        if (!first) return null
 
         const lat = Number.parseFloat(first.lat)
         const lon = Number.parseFloat(first.lon)
-        const precision = this.determinePrecision(first)
 
         if (Number.isNaN(lat) || Number.isNaN(lon)) return null
 
-        const geoResult: GeoCoordinates = { lat, lon, precision }
-
-        await this.redis.set(cacheKey, JSON.stringify(geoResult), 'EX', this.CACHE_TTL_SECONDS)
-        return geoResult
+        return {
+          lat,
+          lon,
+          precision: this.determinePrecision(first),
+        }
       } catch (error) {
         const err = error as AxiosError
         const status = err.response?.status
-        const isRetryable = !err.response || (typeof status === 'number' && (status >= 500 || status === 429))
 
-        if (!isRetryable || attempt === this.MAX_RETRIES) {
-          return null
-        }
-        const delay = this.computeDelayMs(attempt, err)
+        if (status === 429) throw new GeoServiceBusyError('Nominatim')
+
+        const isRetryable = !err.response || (typeof status === 'number' && status >= 500)
+
+        if (!isRetryable || attempt === this.MAX_RETRIES) return null
+
+        const delay = this.BACKOFF_MS * Math.pow(2, attempt)
         await this.sleep(delay)
       }
     }
     return null
   }
 
-  // ... [Helper methods: waitForRateLimit, determinePrecision, generateCacheKey, cleanParams, sleep, etc.] ...
   private async waitForRateLimit(): Promise<void> {
-    const POLL_INTERVAL_MS = 200
-    const JITTER_MS = 50
-    while (true) {
+    const start = Date.now()
+    while (Date.now() - start < this.MAX_WAIT_FOR_LOCK_MS) {
       try {
         const acquired = await this.redis.set(this.RATE_LIMIT_KEY, '1', 'PX', this.RATE_LIMIT_LOCK_TTL_MS, 'NX')
         if (acquired === 'OK') return
-        await this.sleep(POLL_INTERVAL_MS + Math.random() * JITTER_MS)
+        await this.sleep(200 + Math.random() * 50)
       } catch (err) {
         await this.sleep(1000)
         return
       }
     }
+    throw new GeoServiceBusyError('Nominatim')
   }
 
-  private determinePrecision(item: NominatimSearchItem): GeoPrecision {
+  private determinePrecision(item: any): GeoPrecision {
     const type = item.addresstype || item.type || ''
     if (['house', 'building', 'apartments'].includes(type)) return 'ROOFTOP'
     if (['residential', 'secondary', 'tertiary', 'primary', 'road', 'way', 'highway'].includes(type)) return 'ROOFTOP'
@@ -168,12 +135,6 @@ export class NominatimGeoProvider implements GeocodingProvider {
     if (['city', 'town', 'municipality', 'administrative'].includes(type)) return 'CITY'
     if (item.place_rank && item.place_rank < 16) return 'CITY'
     return 'NEIGHBORHOOD'
-  }
-
-  private generateCacheKey(params: Record<string, unknown>): string {
-    const str = JSON.stringify(params)
-    const hash = crypto.createHash('sha256').update(str).digest('hex')
-    return `${this.CACHE_PREFIX}${hash}`
   }
 
   private cleanParams(params: NominatimSearchParams): Record<string, string | number> {
@@ -188,26 +149,5 @@ export class NominatimGeoProvider implements GeocodingProvider {
 
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms))
-  }
-
-  private parseRetryAfterMs(value: unknown): number | null {
-    if (typeof value !== 'string') return null
-    const asSeconds = Number.parseInt(value, 10)
-    if (Number.isFinite(asSeconds) && asSeconds >= 0) return asSeconds * 1000
-    const asDate = Date.parse(value)
-    if (!Number.isNaN(asDate)) {
-      const delta = asDate - Date.now()
-      return delta > 0 ? delta : 0
-    }
-    return null
-  }
-
-  private computeDelayMs(attempt: number, err?: AxiosError): number {
-    const base = this.BACKOFF_MS * Math.pow(2, attempt)
-    if (err?.response?.status === 429) {
-      const retryAfter = this.parseRetryAfterMs(err.response.headers?.['retry-after'])
-      if (retryAfter !== null) return retryAfter
-    }
-    return base
   }
 }

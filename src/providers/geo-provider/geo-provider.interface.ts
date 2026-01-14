@@ -1,5 +1,11 @@
 export type GeoPrecision = 'ROOFTOP' | 'NEIGHBORHOOD' | 'CITY'
 
+export enum GeoPrecisionEnum {
+  ROOFTOP = 'ROOFTOP',
+  NEIGHBORHOOD = 'NEIGHBORHOOD',
+  CITY = 'CITY',
+}
+
 export interface GeoCoordinates {
   lat: number
   lon: number
