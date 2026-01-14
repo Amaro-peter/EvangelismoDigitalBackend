@@ -1,5 +1,3 @@
-import { create } from 'axios'
-
 export const messages = {
   validation: {
     invalidData: 'Dados de registro inválidos!',
