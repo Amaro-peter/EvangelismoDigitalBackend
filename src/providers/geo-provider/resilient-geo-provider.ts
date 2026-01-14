@@ -9,8 +9,10 @@ export class ResilientGeoProvider implements GeocodingProvider {
   private readonly NEGATIVE_CACHE_TTL_SECONDS = 60 * 60 // 1 hour for null results
   private readonly CACHE_PREFIX = 'cache:geocoding:'
   private readonly LOCK_TTL_MS = 10_000 // 10 seconds
-  private readonly LOCK_RETRY_DELAY_MS = 50
-  private readonly LOCK_MAX_RETRIES = 200 // Total: 10s max wait
+  private readonly MAX_WAIT_TIME_MS = 10_000 // Total max wait time
+
+  // Lazy-loaded subscriber client for Pub/Sub events
+  private subClient: Redis | null = null
 
   constructor(
     private readonly providers: GeocodingProvider[],
@@ -35,7 +37,7 @@ export class ResilientGeoProvider implements GeocodingProvider {
     cacheKey: string,
     action: (provider: GeocodingProvider) => Promise<GeoCoordinates | null>,
   ): Promise<GeoCoordinates | null> {
-    // 1. Try Cache First + Test Redis Health
+    // 1. Try Cache First
     let redisHealthy = true
     try {
       const cached = await this.redis.get(cacheKey)
@@ -45,14 +47,12 @@ export class ResilientGeoProvider implements GeocodingProvider {
           logger.debug({ cacheKey }, 'Cache hit for geocoding query')
           return parsed
         }
-        // If undefined, cache was corrupt - proceed to fetch
       }
     } catch (err) {
-      logger.warn({ err, cacheKey }, 'Redis unavailable - bypassing cache and locking entirely')
+      logger.warn({ err, cacheKey }, 'Redis unavailable - bypassing cache')
       redisHealthy = false
     }
 
-    // If Redis is down, skip all Redis operations and go straight to providers
     if (!redisHealthy) {
       return this.executeStrategy(action)
     }
@@ -63,13 +63,12 @@ export class ResilientGeoProvider implements GeocodingProvider {
     const lockAcquired = await this.acquireLock(lockKey, lockToken)
 
     if (!lockAcquired) {
-      // Another instance is fetching this data
-      // Wait for it to complete and retry cache
+      // Wait for the lock holder to finish (Event-Driven)
       return this.waitForCacheOrFallback(cacheKey, lockKey, action)
     }
 
     try {
-      // 3. Double-check cache (another instance might have populated it)
+      // 3. Double-check cache
       try {
         const recheck = await this.redis.get(cacheKey)
         if (recheck !== null) {
@@ -78,21 +77,20 @@ export class ResilientGeoProvider implements GeocodingProvider {
             logger.debug({ cacheKey }, 'Cache populated while acquiring lock')
             return parsed
           }
-          // Corrupted cache found - will fetch fresh data below
         }
       } catch (err) {
-        logger.warn({ err, cacheKey }, 'Redis error during double-check, proceeding to fetch')
+        logger.warn({ err, cacheKey }, 'Redis error during double-check')
       }
 
       // 4. Execute Provider Strategy
       const result = await this.executeStrategy(action)
 
-      // 5. Save to Cache (even if null to prevent repeated lookups)
+      // 5. Save to Cache
       await this.saveToCache(cacheKey, result)
 
       return result
     } finally {
-      // 6. Release Lock
+      // 6. Release Lock & Notify Waiters
       await this.releaseLock(lockKey, lockToken)
     }
   }
@@ -102,144 +100,142 @@ export class ResilientGeoProvider implements GeocodingProvider {
       return JSON.parse(cached)
     } catch (parseError) {
       logger.warn({ err: parseError, cacheKey }, 'Invalid JSON in cache, ignoring')
-      // Return undefined to signal cache corruption (not the same as cached null)
       return undefined
     }
   }
 
   private async acquireLock(lockKey: string, token: string): Promise<boolean> {
     try {
-      // SET key value PX milliseconds NX (only if key doesn't exist)
       const result = await this.redis.set(lockKey, token, 'PX', this.LOCK_TTL_MS, 'NX')
       return result === 'OK'
     } catch (err) {
-      logger.warn({ err, lockKey }, 'Redis error acquiring lock - proceeding without lock (degraded mode)')
-      return true // Fail-open: proceed AS IF lock was acquired (degraded mode)
+      logger.warn({ err, lockKey }, 'Redis error acquiring lock - proceeding degraded')
+      return true
     }
   }
 
   private async releaseLock(lockKey: string, token: string): Promise<void> {
     try {
-      // Lua script ensures atomic check-and-delete
+      // Lua script: Deletes lock AND publishes release event atomically
       const script = `
         if redis.call("get", KEYS[1]) == ARGV[1] then
-          return redis.call("del", KEYS[1])
+          local del = redis.call("del", KEYS[1])
+          redis.call("publish", KEYS[2], "released")
+          return del
         else
           return 0
         end
       `
-      await this.redis.eval(script, 1, lockKey, token)
+      const channel = `${lockKey}:released`
+      await this.redis.eval(script, 2, lockKey, channel, token)
     } catch (err) {
       logger.warn({ err, lockKey }, 'Redis error releasing lock')
     }
   }
 
+  /**
+   * Optimized: Uses Pub/Sub to wait instead of sleep-polling
+   */
   private async waitForCacheOrFallback(
     cacheKey: string,
     lockKey: string,
     action: (provider: GeocodingProvider) => Promise<GeoCoordinates | null>,
   ): Promise<GeoCoordinates | null> {
-    // Wait for the lock holder to populate cache
-    for (let i = 0; i < this.LOCK_MAX_RETRIES; i++) {
-      await this.sleep(this.LOCK_RETRY_DELAY_MS)
+    const channel = `${lockKey}:released`
+    const start = Date.now()
 
+    // Ensure we have a subscriber client
+    const sub = this.getSubscriber()
+
+    // Subscribe immediately to catch any upcoming release events
+    try {
+      await sub.subscribe(channel)
+    } catch (err) {
+      logger.warn({ err }, 'Failed to subscribe to lock channel, falling back to polling')
+    }
+
+    while (Date.now() - start < this.MAX_WAIT_TIME_MS) {
+      // 1. Check if lock is gone (or cache populated)
       try {
-        // Check if lock was released (means other instance finished)
         const lockExists = await this.redis.exists(lockKey)
         if (lockExists === 0) {
-          // Lock released, check cache first
+          // Lock released! Check cache.
           const cached = await this.redis.get(cacheKey)
           if (cached !== null) {
             const parsed = this.parseCache(cached, cacheKey)
-            if (parsed !== undefined) {
-              logger.debug({ cacheKey, retries: i + 1 }, 'Cache populated by another instance')
-              return parsed
-            }
+            if (parsed !== undefined) return parsed
           }
 
-          // Lock released but no cache = try to acquire lock ourselves
-          // This prevents thundering herd when multiple waiters timeout simultaneously
+          // No cache? Try to acquire lock ourselves
           const fallbackResult = await this.tryAcquireAndFetch(cacheKey, lockKey, action)
-          if (fallbackResult !== undefined) {
-            return fallbackResult
-          }
-          // Couldn't acquire lock, another waiter got it - continue waiting
+          if (fallbackResult !== undefined) return fallbackResult
         }
       } catch (err) {
-        logger.warn({ err, cacheKey }, 'Redis error while waiting for cache - proceeding to degraded fetch')
-        // Redis failed during wait, proceed in degraded mode (no lock)
-        return this.executeStrategy(action)
+        logger.warn({ err }, 'Redis error in wait loop')
+        break // Fail to degraded mode
       }
+
+      // 2. Wait for Notification (Event-driven sleep)
+      // We wait for the 'message' event OR a timeout (fallback polling interval)
+      await new Promise<void>((resolve) => {
+        const timeout = setTimeout(() => resolve(), 2000) // 2s fallback heartbeat
+
+        sub.once('message', (ch, msg) => {
+          if (ch === channel && msg === 'released') {
+            clearTimeout(timeout)
+            resolve()
+          }
+        })
+      })
     }
 
-    // Timeout: Try one more time to acquire lock before giving up
-    logger.warn({ cacheKey }, 'Lock wait timeout - attempting final lock acquisition')
-    const finalResult = await this.tryAcquireAndFetch(cacheKey, lockKey, action)
-    if (finalResult !== undefined) {
-      return finalResult
-    }
+    // Cleanup subscription for this key (optional but good practice to unsubscribe if not using pattern)
+    // Note: In high throughput, pattern matching or global listener is better, but this is safe logic.
+    await sub.unsubscribe(channel).catch(() => {})
 
-    // Absolute fallback: Fetch without lock (degraded mode)
-    // This should be rare - only when lock is perpetually held
-    logger.warn({ cacheKey }, 'Could not acquire lock after timeout - fetching in degraded mode')
+    // Timeout or Error: Fallback
+    logger.warn({ cacheKey }, 'Lock wait timeout - fetching in degraded mode')
     return this.executeStrategy(action)
   }
 
-  /**
-   * Attempts to acquire lock and fetch data. Returns undefined if lock wasn't acquired.
-   * This prevents thundering herd by ensuring only one waiter proceeds to fetch.
-   */
   private async tryAcquireAndFetch(
     cacheKey: string,
     lockKey: string,
     action: (provider: GeocodingProvider) => Promise<GeoCoordinates | null>,
   ): Promise<GeoCoordinates | null | undefined> {
     const lockToken = crypto.randomBytes(16).toString('hex')
-
     try {
-      const acquired = await this.acquireLockStrict(lockKey, lockToken)
-      if (!acquired) {
-        // Another waiter got the lock first - return undefined to signal "keep waiting"
-        return undefined
-      }
+      // Strict lock acquisition
+      const result = await this.redis.set(lockKey, lockToken, 'PX', this.LOCK_TTL_MS, 'NX')
+      if (result !== 'OK') return undefined
 
       try {
-        // Double-check cache (another instance might have just populated it)
+        // Check cache one last time
         const cached = await this.redis.get(cacheKey)
         if (cached !== null) {
           const parsed = this.parseCache(cached, cacheKey)
-          if (parsed !== undefined) {
-            logger.debug({ cacheKey }, 'Cache populated while acquiring fallback lock')
-            return parsed
-          }
+          if (parsed !== undefined) return parsed
         }
 
-        // Fetch from providers
-        const result = await this.executeStrategy(action)
-        await this.saveToCache(cacheKey, result)
-        return result
+        const res = await this.executeStrategy(action)
+        await this.saveToCache(cacheKey, res)
+        return res
       } finally {
         await this.releaseLock(lockKey, lockToken)
       }
-    } catch (err) {
-      logger.warn({ err, cacheKey }, 'Error in tryAcquireAndFetch')
-      // Return undefined to signal failure, let caller decide
+    } catch {
       return undefined
     }
   }
 
-  /**
-   * Strict lock acquisition - does NOT fail-open on Redis errors.
-   * Used for fallback path where we want to prevent thundering herd.
-   */
-  private async acquireLockStrict(lockKey: string, token: string): Promise<boolean> {
-    try {
-      const result = await this.redis.set(lockKey, token, 'PX', this.LOCK_TTL_MS, 'NX')
-      return result === 'OK'
-    } catch (err) {
-      logger.warn({ err, lockKey }, 'Redis error in strict lock acquisition')
-      return false // Fail-closed: don't proceed without lock
+  private getSubscriber(): Redis {
+    if (!this.subClient) {
+      // Create a dedicated connection for subscriptions
+      // This prevents blocking the main client and allows Pub/Sub
+      this.subClient = this.redis.duplicate()
+      this.subClient.on('error', (err) => logger.error({ err }, 'Redis Subscriber Error'))
     }
+    return this.subClient
   }
 
   private async executeStrategy(
@@ -324,9 +320,5 @@ export class ResilientGeoProvider implements GeocodingProvider {
     const str = JSON.stringify(cleanedParams)
     const hash = crypto.createHash('sha256').update(str).digest('hex')
     return `${this.CACHE_PREFIX}${hash}`
-  }
-
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms))
   }
 }
