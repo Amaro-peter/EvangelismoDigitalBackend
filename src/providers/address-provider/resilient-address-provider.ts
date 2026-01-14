@@ -2,83 +2,106 @@ import { Redis } from 'ioredis'
 import { AddressData, AddressProvider } from './address-provider.interface'
 import { logger } from '@lib/logger'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
+import { ResilientCache } from '@lib/redis/resilient-cache'
+
+enum AddressCacheScope {
+  CEP = 'cep',
+}
 
 export class ResilientAddressProvider implements AddressProvider {
-  private readonly CACHE_PREFIX = 'cache:cep:'
-  private readonly CACHE_TTL_SECONDS = 60 * 60 * 24 * 90 // 90 dias
+  private readonly cacheManager: ResilientCache
 
   constructor(
     private readonly providers: AddressProvider[],
-    private readonly redis: Redis,
-  ) {}
+    redis: Redis,
+  ) {
+    if (this.providers.length === 0) {
+      throw new Error('ResilientAddressProvider requires at least one provider')
+    }
+
+    // Initialize the shared cache helper
+    this.cacheManager = new ResilientCache(redis, {
+      prefix: 'cache:cep:', // Retaining original prefix
+      defaultTtlSeconds: 60 * 60 * 24 * 90, // 90 days
+      negativeTtlSeconds: 60 * 60, // 1 hour (Smart Negative Caching)
+    })
+  }
 
   async fetchAddress(cep: string): Promise<AddressData> {
     const cleanCep = cep.replace(/\D/g, '')
-    const cacheKey = `${this.CACHE_PREFIX}${cleanCep}`
 
-    // 1. Tentar Cache (Redis)
-    try {
-      const cached = await this.redis.get(cacheKey)
-      if (cached) {
-        logger.info({ cep: cleanCep }, 'Endereço recuperado do cache (Redis)')
-        return JSON.parse(cached) as AddressData
-      }
-    } catch (err) {
-      logger.error({ error: err }, 'Erro ao ler cache do Redis')
+    // Generate a consistent cache key
+    const cacheKey = this.cacheManager.generateKey({
+      _scope: AddressCacheScope.CEP,
+      cep: cleanCep,
+    })
+
+    // Execute with ResilientCache protection (Locking, Stampede Guard, etc.)
+    const result = await this.cacheManager.getOrFetch<AddressData>(cacheKey, async () => {
+      return this.executeStrategy(cleanCep)
+    })
+
+    // If result is null, it means "Invalid CEP" was cached negatively
+    if (!result) {
+      throw new InvalidCepError()
     }
 
-    // 2. Tentar Providers em Ordem (Fallback Strategy)
+    return result
+  }
+
+  /**
+   * Iterates through providers.
+   * - Returns AddressData on Success.
+   * - Returns NULL on "Invalid CEP" (Logic Error) -> To be cached.
+   * - Throws ERROR on System Failure (Network/Timeout) -> To abort cache.
+   */
+  private async executeStrategy(cep: string): Promise<AddressData | null> {
     let lastError: Error | null = null
     let invalidCepCount = 0
 
-    for (const provider of this.providers) {
+    for (const [index, provider] of this.providers.entries()) {
       const providerName = provider.constructor.name
+      const isLastProvider = index === this.providers.length - 1
+
       try {
-        const result = await provider.fetchAddress(cleanCep)
+        const result = await provider.fetchAddress(cep)
 
-        // 3. Sucesso: Salvar no Cache e Retornar
-        this.saveToCache(cacheKey, result)
-        return result
+        if (result) {
+          logger.info({ provider: providerName }, 'Address found successfully')
+          return result
+        }
       } catch (error) {
-        lastError = error as Error
-
-        // Se for erro de CEP Inválido, contar quantos providers confirmaram isso
+        // 1. Logic Error: Provider explicitly confirmed CEP doesn't exist
         if (error instanceof InvalidCepError) {
           invalidCepCount++
-          logger.warn({ cep: cleanCep, provider: providerName, invalidCepCount }, 'Provedor confirmou CEP inválido')
-          // Se todos os providers confirmaram que o CEP é inválido, lançar erro imediatamente
-          if (invalidCepCount >= this.providers.length) {
-            logger.error({ cep: cleanCep }, 'CEP inválido confirmado por todos os provedores')
-            throw new InvalidCepError()
-          }
-          continue // Tenta próximo provider
+          // We continue trying other providers just in case one database is outdated,
+          // but we record that at least one provider said "Invalid".
+          continue
         }
 
-        // Para outros erros (downtime, rate limit, etc.), logar e tentar próximo
+        // 2. System Error: Network, Timeout, Rate Limit, 500s
+        lastError = error as Error
         logger.warn(
-          { cep: cleanCep, provider: providerName, error: lastError.message },
-          'Falha no provedor de endereço, tentando próximo...',
+          { provider: providerName, error: lastError.message },
+          'Provider failed (System Error). Switching to fallback...',
         )
       }
     }
 
-    // Se chegou aqui, todos falharam
-    // Se pelo menos um confirmou InvalidCep, lançar InvalidCepError
+    // === DECISION PHASE ===
+
+    // Case A: At least one provider said "Invalid CEP" and no one else succeeded.
+    // We treat this as a confirmed "Not Found".
+    // RETURN NULL -> This tells ResilientCache to store a Negative Cache entry (1 hour).
     if (invalidCepCount > 0) {
-      logger.error({ cep: cleanCep, invalidCepCount }, 'CEP inválido (confirmado por alguns provedores)')
-      throw new InvalidCepError()
+      logger.warn({ cep, invalidCepCount }, 'CEP confirmed as invalid by providers')
+      return null
     }
 
-    // Caso contrário, lançar o último erro encontrado
-    logger.error({ cep: cleanCep }, 'Todos os provedores de endereço falharam')
-    throw lastError || new Error('Nenhum provedor de endereço configurado')
-  }
-
-  private async saveToCache(key: string, data: AddressData) {
-    try {
-      await this.redis.set(key, JSON.stringify(data), 'EX', this.CACHE_TTL_SECONDS)
-    } catch (err) {
-      logger.error({ error: err }, 'Erro ao salvar endereço no cache do Redis')
-    }
+    // Case B: All providers failed with System Errors (no one said "Invalid CEP").
+    // We DO NOT return null, because that would cache a system outage as "Not Found".
+    // THROW -> This tells ResilientCache to ABORT saving anything.
+    logger.error({ cep, lastError }, 'All address providers failed with system errors')
+    throw lastError || new Error('All address providers failed')
   }
 }

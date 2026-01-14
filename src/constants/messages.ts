@@ -28,6 +28,7 @@ export const messages = {
     formSubmissionFailed: 'Falha ao enviar o formulário.',
     createChurchFailed: 'Falha ao criar a igreja.',
     createUserFailed: 'Falha ao criar o usuário.',
+    geoProviderFailureError: 'Falha ao se comunicar com o provedor de geolocalização.',
   },
   info: {
     passwordResetGeneric: 'Se o usuário existir, você receberá um e-mail com instruções para redefinir a senha.',

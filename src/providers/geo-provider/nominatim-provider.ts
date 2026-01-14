@@ -3,6 +3,7 @@ import { Redis } from 'ioredis'
 import { GeocodingProvider, GeoCoordinates, GeoSearchOptions, GeoPrecision } from './geo-provider.interface'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { createHttpClient } from '@lib/http/axios'
+import { logger } from '@lib/logger'
 
 export interface NominatimConfig {
   apiUrl: string
@@ -14,145 +15,141 @@ export class NominatimGeoProvider implements GeocodingProvider {
   private static api: AxiosInstance
   private readonly redis: Redis
 
-  // Rate Limiting ONLY (No Cache)
+  // Rate Limiting ONLY (No Cache - Caching is handled by ResilientGeoProvider)
   private readonly RATE_LIMIT_KEY = 'ratelimit:nominatim'
-  private readonly RATE_LIMIT_LOCK_TTL_MS = 1000
-  private readonly MAX_WAIT_FOR_LOCK_MS = 3000
+  private readonly RATE_LIMIT_LOCK_TTL_MS = 1100 // Slightly > 1s (Nominatim policy is strict 1 req/sec)
+  private readonly MAX_WAIT_FOR_LOCK_MS = 5000 // Wait up to 5s for a slot
 
-  private readonly MAX_RETRIES = 2
   private readonly BACKOFF_MS = 300
   private readonly NOMINATIM_TIMEOUT = 6000
-
-  // HTTPS Agent Settings
-  private readonly KEEP_ALIVE_MSECS = 1000
-  private readonly MAX_SOCKETS = 1
-  private readonly MAX_FREE_SOCKETS = 1
-  private readonly HTTPS_AGENT_TIMEOUT = 60000
 
   constructor(
     redisConnection: Redis,
     private readonly config: NominatimConfig,
   ) {
     this.redis = redisConnection
-
     if (!NominatimGeoProvider.api) {
-      // Shared agent is used by default.
-      // User-Agent header is critical for Nominatim usage policy.
       NominatimGeoProvider.api = createHttpClient({
         baseURL: this.config.apiUrl,
         timeout: this.NOMINATIM_TIMEOUT,
         headers: {
-          'User-Agent': 'EvangelismoDigitalBackend/1.0 (contact@findhope.digital)',
-        },
-        agentOptions: {
-          keepAliveMsecs: this.KEEP_ALIVE_MSECS,
-          maxSockets: this.MAX_SOCKETS,
-          maxFreeSockets: this.MAX_FREE_SOCKETS,
-          timeout: this.HTTPS_AGENT_TIMEOUT,
+          'User-Agent': 'EvangelismoDigitalBackend/1.0', // Required by Nominatim TOS
         },
       })
     }
   }
 
   async search(query: string): Promise<GeoCoordinates | null> {
-    return this.performRequest({ q: query })
+    return this.performRequest({ q: query, limit: 1, format: 'json' })
   }
 
   async searchStructured(options: GeoSearchOptions): Promise<GeoCoordinates | null> {
     return this.performRequest({
       street: options.street,
-      neighborhood: options.neighborhood,
       city: options.city,
       state: options.state,
       country: options.country,
+      limit: 1,
+      format: 'json',
     })
   }
 
   private async performRequest(params: NominatimSearchParams): Promise<GeoCoordinates | null> {
-    const finalParams = this.cleanParams({
-      ...params,
-      format: 'jsonv2',
-      limit: 1,
-      addressdetails: 1,
-    })
+    try {
+      // 1. Enforce Rate Limit (Respect TOS)
+      await this.waitForRateLimit()
 
-    // 1. Rate Limiting
-    await this.waitForRateLimit()
+      const cleanParams = this.cleanParams(params)
+      const response = await NominatimGeoProvider.api.get<any[]>('/search', { params: cleanParams })
 
-    // 2. Request with Retries
-    for (let attempt = 0; attempt <= this.MAX_RETRIES; attempt++) {
-      try {
-        const result = await NominatimGeoProvider.api.get<any[]>('/search', {
-          params: finalParams,
-        })
-
-        const first = result.data?.[0]
-        if (!first) return null
-
-        const lat = Number.parseFloat(first.lat)
-        const lon = Number.parseFloat(first.lon)
-
-        if (Number.isNaN(lat) || Number.isNaN(lon)) return null
-
-        return {
-          lat,
-          lon,
-          precision: this.determinePrecision(first),
-        }
-      } catch (error) {
-        const err = error as AxiosError
-        const status = err.response?.status
-
-        if (status === 429) throw new GeoServiceBusyError('Nominatim')
-
-        const isRetryable = !err.response || (typeof status === 'number' && status >= 500)
-
-        if (!isRetryable || attempt === this.MAX_RETRIES) return null
-
-        const delay = this.BACKOFF_MS * Math.pow(2, attempt)
-        await this.sleep(delay)
+      // 2. Handle Semantic "Not Found"
+      // Nominatim returns an empty array [] when nothing is found.
+      if (!response.data || response.data.length === 0) {
+        return null // Safe to cache as "Not Found"
       }
+
+      // 3. Map Success Response
+      const bestMatch = response.data[0]
+      return {
+        lat: parseFloat(bestMatch.lat),
+        lon: parseFloat(bestMatch.lon),
+        precision: this.determinePrecision(bestMatch),
+      }
+    } catch (error) {
+      const err = error as AxiosError
+      const status = err.response?.status
+
+      if (status === 404) {
+        return null
+      }
+
+      // Case B: Rate Limited (429) - Throw specific error to trigger fallback provider
+      if (status === 429) {
+        logger.warn('Nominatim Rate Limit Hit (429)')
+        throw new GeoServiceBusyError('Nominatim')
+      }
+
+      // Case C: System/Network Errors (500, Timeout, DNS)
+      // DO NOT return null. Throwing ensures we do NOT cache this failure.
+      logger.warn({ error: err.message, status }, 'Nominatim Provider Failed')
+      throw error
     }
-    return null
   }
 
   private async waitForRateLimit(): Promise<void> {
     const start = Date.now()
+    // Poll for lock availability
     while (Date.now() - start < this.MAX_WAIT_FOR_LOCK_MS) {
       try {
         const acquired = await this.redis.set(this.RATE_LIMIT_KEY, '1', 'PX', this.RATE_LIMIT_LOCK_TTL_MS, 'NX')
         if (acquired === 'OK') return
+
+        // Wait random small interval before retrying to avoid thundering herd locally
         await this.sleep(200 + Math.random() * 50)
       } catch (err) {
+        // If Redis fails, we wait a bit and try to proceed degraded (or throw)
+        logger.warn({ err }, 'Redis error during Nominatim rate limiting')
         await this.sleep(1000)
-        return
+        return // Proceeding risky, or could throw
       }
     }
-    throw new GeoServiceBusyError('Nominatim')
+    throw new GeoServiceBusyError('Nominatim (Local Rate Limit Timeout)')
   }
 
   private determinePrecision(item: any): GeoPrecision {
     const type = item.addresstype || item.type || ''
-    if (['house', 'building', 'apartments'].includes(type)) return GeoPrecision.ROOFTOP
-    if (['residential', 'secondary', 'tertiary', 'primary', 'road', 'way', 'highway'].includes(type))
-      return GeoPrecision.ROOFTOP
+
+    // High Precision
+    if (['house', 'building', 'apartments', 'residential'].includes(type)) return GeoPrecision.ROOFTOP
+    if (['secondary', 'tertiary', 'primary', 'road', 'way', 'highway'].includes(type)) return GeoPrecision.ROOFTOP
+
+    // Medium Precision
     if (['neighbourhood', 'suburb', 'quarter', 'hamlet', 'village'].includes(type)) return GeoPrecision.NEIGHBORHOOD
+
+    // Low Precision
     if (['city', 'town', 'municipality', 'administrative'].includes(type)) return GeoPrecision.CITY
-    if (item.place_rank && item.place_rank < 16) return GeoPrecision.CITY
-    return GeoPrecision.NEIGHBORHOOD
+
+    // Fallback based on rank if available
+    if (item.place_rank) {
+      if (item.place_rank >= 26) return GeoPrecision.ROOFTOP
+      if (item.place_rank >= 16) return GeoPrecision.NEIGHBORHOOD
+      return GeoPrecision.CITY
+    }
+
+    return GeoPrecision.CITY
   }
 
   private cleanParams(params: NominatimSearchParams): Record<string, string | number> {
     const cleaned: Record<string, string | number> = {}
     for (const [key, value] of Object.entries(params)) {
-      if (value === undefined) continue
-      if (typeof value === 'string' && value.trim().length === 0) continue
-      cleaned[key] = typeof value === 'string' ? value.trim() : value
+      if (value !== undefined && value !== null && value !== '') {
+        cleaned[key] = value
+      }
     }
     return cleaned
   }
 
-  private sleep(ms: number): Promise<void> {
+  private sleep(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms))
   }
 }

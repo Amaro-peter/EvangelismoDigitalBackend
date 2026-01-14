@@ -1,8 +1,11 @@
 import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-found-error'
+import { InvalidCepError } from '@use-cases/errors/invalid-cep-error' // <--- Don't forget this import
 import { AddressProvider } from 'providers/address-provider/address-provider.interface'
 import { GeocodingProvider, GeoCoordinates, GeoPrecision } from 'providers/geo-provider/geo-provider.interface'
 import { Redis } from 'ioredis'
 import { logger } from '@lib/logger'
+import { ResilientCache } from '@lib/redis/resilient-cache'
+import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
 
 interface CepToLatLonRequest {
   cep: string
@@ -15,108 +18,88 @@ interface CepToLatLonResponse {
 }
 
 export class CepToLatLonUseCase {
-  private readonly CACHE_PREFIX = 'cache:cep-coords:'
-  private readonly CACHE_TTL_SECONDS = 60 * 60 * 24 * 90 // 90 days
+  private readonly cacheManager: ResilientCache
 
   constructor(
     private geocodingProvider: GeocodingProvider,
     private addressProvider: AddressProvider,
-    private redis: Redis,
-  ) {}
+    redis: Redis,
+  ) {
+    this.cacheManager = new ResilientCache(redis, {
+      prefix: 'cache:cep-coords:',
+      defaultTtlSeconds: 60 * 60 * 24 * 90, // 90 days
+      negativeTtlSeconds: 60 * 60, // 1 hour (Negative Cache)
+    })
+  }
 
   async execute({ cep }: CepToLatLonRequest): Promise<CepToLatLonResponse> {
     const cleanCep = cep.replace(/\D/g, '')
-    const cacheKey = `${this.CACHE_PREFIX}${cleanCep}`
+    const cacheKey = this.cacheManager.generateKey({ cep: cleanCep })
 
-    // ==========================================
-    // STEP 1: Check Unified CEP → Coordinates Cache
-    // ==========================================
-    try {
-      const cached = await this.redis.get(cacheKey)
-      if (cached) {
-        logger.info({ cep: cleanCep }, 'Coordenadas recuperadas do cache unificado')
-        return JSON.parse(cached) as CepToLatLonResponse
+    const result = await this.cacheManager.getOrFetch<CepToLatLonResponse>(cacheKey, async () => {
+      try {
+        // 1. Fetch Address
+        const address = await this.addressProvider.fetchAddress(cleanCep)
+
+        if (address.lat && address.lon) {
+          return {
+            userLat: address.lat,
+            userLon: address.lon,
+            precision: GeoPrecision.ROOFTOP,
+          }
+        }
+
+        const { logradouro, bairro, localidade, uf } = address
+
+        // 3. Geocoding Strategies
+        if (logradouro) {
+          const exact = await this.geocodingProvider.search(`${logradouro}, ${localidade} - ${uf}, Brazil`)
+          if (exact) return this.mapResponse(exact)
+        }
+
+        if (bairro) {
+          const approx = await this.geocodingProvider.search(`${bairro}, ${localidade} - ${uf}, Brazil`)
+          if (approx) return this.mapResponse(approx)
+        }
+
+        const city = await this.geocodingProvider.searchStructured({
+          city: localidade,
+          state: uf,
+          country: 'Brazil',
+        })
+
+        if (city) return this.mapResponse(city)
+
+        // 4. PARANOID GUARD
+        logger.error(
+          { cep: cleanCep, city: localidade },
+          'Critical: Geocoder could not find a known city. Aborting cache.',
+        )
+
+        throw new GeoProviderFailureError()
+      } catch (error) {
+        // === THE MISSING PIECE ===
+        // If it is a logic error (Invalid CEP), return null so Redis caches it.
+        // If it is a system error (Network/Paranoid), re-throw so Redis ignores it.
+        if (error instanceof InvalidCepError) {
+          return null
+        }
+        throw error
       }
-    } catch (err) {
-      logger.error({ error: err }, 'Erro ao ler cache unificado do Redis')
-    }
+    })
 
-    // ==========================================
-    // STEP 2: Fetch Address Data (with its own cache layer)
-    // ==========================================
-    const addressData = await this.addressProvider.fetchAddress(cleanCep)
-
-    // ==========================================
-    // STEP 3: Fast Path - Provider Already Has Coordinates
-    // ==========================================
-    if (addressData.lat && addressData.lon) {
-      const response: CepToLatLonResponse = {
-        userLat: addressData.lat,
-        userLon: addressData.lon,
-        // AwesomeAPI retorna centro da cidade para CEPs genéricos, ou rua para específicos.
-        precision: addressData.logradouro
-          ? GeoPrecision.ROOFTOP
-          : addressData.bairro
-            ? GeoPrecision.NEIGHBORHOOD
-            : GeoPrecision.CITY,
-      }
-
-      // Save to unified cache
-      await this.saveToCache(cacheKey, response)
-      return response
-    }
-
-    // ==========================================
-    // STEP 4: Geocoding Fallback Strategies (Nominatim with its own cache)
-    // ==========================================
-    const { logradouro, localidade, uf, bairro } = addressData
-    let geoResult: GeoCoordinates | null = null
-
-    // STRATEGY 1: SMART FREE-TEXT SEARCH
-    if (logradouro) {
-      const fullAddress = `${logradouro}, ${localidade} - ${uf}, Brazil`
-      geoResult = await this.geocodingProvider.search(fullAddress)
-    }
-
-    // STRATEGY 2: NEIGHBORHOOD FALLBACK
-    if (!geoResult && bairro) {
-      const neighborhoodAddress = `${bairro}, ${localidade} - ${uf}, Brazil`
-      geoResult = await this.geocodingProvider.search(neighborhoodAddress)
-    }
-
-    // STRATEGY 3: CITY FALLBACK
-    if (!geoResult) {
-      geoResult = await this.geocodingProvider.searchStructured({
-        city: localidade,
-        state: uf,
-        country: 'Brazil',
-      })
-    }
-
-    if (!geoResult) {
+    if (!result) {
       throw new CoordinatesNotFoundError()
     }
 
-    const response: CepToLatLonResponse = {
-      userLat: geoResult.lat,
-      userLon: geoResult.lon,
-      precision: geoResult.precision,
-    }
-
-    // ==========================================
-    // STEP 5: Save Final Result to Unified Cache
-    // ==========================================
-    await this.saveToCache(cacheKey, response)
-
-    return response
+    return result
   }
 
-  private async saveToCache(key: string, data: CepToLatLonResponse): Promise<void> {
-    try {
-      await this.redis.set(key, JSON.stringify(data), 'EX', this.CACHE_TTL_SECONDS)
-      logger.info({ key }, 'Coordenadas salvas no cache unificado')
-    } catch (err) {
-      logger.error({ error: err }, 'Erro ao salvar coordenadas no cache do Redis')
+  private mapResponse(geo: GeoCoordinates): CepToLatLonResponse {
+    return {
+      userLat: geo.lat,
+      userLon: geo.lon,
+      precision: geo.precision,
     }
   }
 }
