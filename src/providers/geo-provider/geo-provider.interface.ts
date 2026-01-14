@@ -18,6 +18,11 @@ export interface GeoSearchOptions {
   country: string
 }
 
+export enum GeoCacheScope {
+  SEARCH = 'search',
+  SEARCH_STRUCTURED = 'searchStructured',
+}
+
 export interface GeocodingProvider {
   search(query: string): Promise<GeoCoordinates | null>
   searchStructured(options: GeoSearchOptions): Promise<GeoCoordinates | null>
