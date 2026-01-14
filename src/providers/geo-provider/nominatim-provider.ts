@@ -3,6 +3,7 @@ import https from 'https'
 import { Redis } from 'ioredis'
 import { GeocodingProvider, GeoCoordinates, GeoSearchOptions, GeoPrecision } from './geo-provider.interface'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
+import { createHttpClient } from '@lib/http/axios'
 
 export interface NominatimConfig {
   apiUrl: string
@@ -21,7 +22,12 @@ export class NominatimGeoProvider implements GeocodingProvider {
 
   private readonly MAX_RETRIES = 2
   private readonly BACKOFF_MS = 300
-  private readonly NOMINATIM_TIMEOUT = 4000
+  private readonly NOMINATIM_TIMEOUT = 6000
+
+  // HTTPS Agent Settings
+  private readonly KEEP_ALIVE_MSECS = 1000
+  private readonly MAX_SOCKETS = 1
+  private readonly MAX_FREE_SOCKETS = 1
   private readonly HTTPS_AGENT_TIMEOUT = 60000
 
   constructor(
@@ -31,21 +37,20 @@ export class NominatimGeoProvider implements GeocodingProvider {
     this.redis = redisConnection
 
     if (!NominatimGeoProvider.api) {
-      const httpsAgent = new https.Agent({
-        keepAlive: true,
-        keepAliveMsecs: 1000,
-        maxSockets: 1,
-        maxFreeSockets: 1,
-        timeout: this.HTTPS_AGENT_TIMEOUT,
-      })
-
-      NominatimGeoProvider.api = axios.create({
+      // Shared agent is used by default.
+      // User-Agent header is critical for Nominatim usage policy.
+      NominatimGeoProvider.api = createHttpClient({
         baseURL: this.config.apiUrl,
         timeout: this.NOMINATIM_TIMEOUT,
         headers: {
           'User-Agent': 'EvangelismoDigitalBackend/1.0 (contact@findhope.digital)',
         },
-        httpsAgent,
+        agentOptions: {
+          keepAliveMsecs: this.KEEP_ALIVE_MSECS,
+          maxSockets: this.MAX_SOCKETS,
+          maxFreeSockets: this.MAX_FREE_SOCKETS,
+          timeout: this.HTTPS_AGENT_TIMEOUT,
+        },
       })
     }
   }
@@ -129,12 +134,13 @@ export class NominatimGeoProvider implements GeocodingProvider {
 
   private determinePrecision(item: any): GeoPrecision {
     const type = item.addresstype || item.type || ''
-    if (['house', 'building', 'apartments'].includes(type)) return 'ROOFTOP'
-    if (['residential', 'secondary', 'tertiary', 'primary', 'road', 'way', 'highway'].includes(type)) return 'ROOFTOP'
-    if (['neighbourhood', 'suburb', 'quarter', 'hamlet', 'village'].includes(type)) return 'NEIGHBORHOOD'
-    if (['city', 'town', 'municipality', 'administrative'].includes(type)) return 'CITY'
-    if (item.place_rank && item.place_rank < 16) return 'CITY'
-    return 'NEIGHBORHOOD'
+    if (['house', 'building', 'apartments'].includes(type)) return GeoPrecision.ROOFTOP
+    if (['residential', 'secondary', 'tertiary', 'primary', 'road', 'way', 'highway'].includes(type))
+      return GeoPrecision.ROOFTOP
+    if (['neighbourhood', 'suburb', 'quarter', 'hamlet', 'village'].includes(type)) return GeoPrecision.NEIGHBORHOOD
+    if (['city', 'town', 'municipality', 'administrative'].includes(type)) return GeoPrecision.CITY
+    if (item.place_rank && item.place_rank < 16) return GeoPrecision.CITY
+    return GeoPrecision.NEIGHBORHOOD
   }
 
   private cleanParams(params: NominatimSearchParams): Record<string, string | number> {

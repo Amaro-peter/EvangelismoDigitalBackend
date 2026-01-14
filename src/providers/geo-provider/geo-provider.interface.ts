@@ -1,6 +1,4 @@
-export type GeoPrecision = 'ROOFTOP' | 'NEIGHBORHOOD' | 'CITY'
-
-export enum GeoPrecisionEnum {
+export enum GeoPrecision {
   ROOFTOP = 'ROOFTOP',
   NEIGHBORHOOD = 'NEIGHBORHOOD',
   CITY = 'CITY',

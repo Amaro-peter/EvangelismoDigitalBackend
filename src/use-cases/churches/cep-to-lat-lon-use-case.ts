@@ -1,6 +1,6 @@
 import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-found-error'
 import { AddressProvider } from 'providers/address-provider/address-provider.interface'
-import { GeocodingProvider, GeoCoordinates } from 'providers/geo-provider/geo-provider.interface'
+import { GeocodingProvider, GeoCoordinates, GeoPrecision } from 'providers/geo-provider/geo-provider.interface'
 import { Redis } from 'ioredis'
 import { logger } from '@lib/logger'
 
@@ -11,7 +11,7 @@ interface CepToLatLonRequest {
 interface CepToLatLonResponse {
   userLat: number
   userLon: number
-  precision: 'ROOFTOP' | 'NEIGHBORHOOD' | 'CITY' | 'APPROXIMATE'
+  precision: GeoPrecision
 }
 
 export class CepToLatLonUseCase {
@@ -54,7 +54,11 @@ export class CepToLatLonUseCase {
         userLat: addressData.lat,
         userLon: addressData.lon,
         // AwesomeAPI retorna centro da cidade para CEPs genéricos, ou rua para específicos.
-        precision: addressData.logradouro ? 'ROOFTOP' : addressData.bairro ? 'NEIGHBORHOOD' : 'CITY',
+        precision: addressData.logradouro
+          ? GeoPrecision.ROOFTOP
+          : addressData.bairro
+            ? GeoPrecision.NEIGHBORHOOD
+            : GeoPrecision.CITY,
       }
 
       // Save to unified cache

@@ -3,6 +3,7 @@ import https from 'https'
 import { AddressData, AddressProvider } from './address-provider.interface'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 import { logger } from '@lib/logger'
+import { createHttpClient } from '@lib/http/axios'
 
 export interface AwesomeApiConfig {
   apiUrl: string
@@ -15,6 +16,8 @@ export class AwesomeApiProvider implements AddressProvider {
   private readonly MAX_RETRIES = 2
   private readonly BACKOFF_MS = 100
   private readonly TIMEOUT = 3000
+
+  // HTTPS Agent Settings
   private readonly KEEP_ALIVE_MSECS = 1000
   private readonly MAX_SOCKETS = 2
   private readonly MAX_FREE_SOCKETS = 2
@@ -22,21 +25,20 @@ export class AwesomeApiProvider implements AddressProvider {
 
   constructor(private readonly config: AwesomeApiConfig) {
     if (!AwesomeApiProvider.api) {
-      const httpsAgent = new https.Agent({
-        keepAlive: true,
-        keepAliveMsecs: this.KEEP_ALIVE_MSECS,
-        maxSockets: this.MAX_SOCKETS,
-        maxFreeSockets: this.MAX_FREE_SOCKETS,
-        timeout: this.HTTPS_AGENT_TIMEOUT,
-      })
-
-      AwesomeApiProvider.api = axios.create({
+      // Using the shared agent instead of the legacy maxSockets: 2 setting
+      // to improve concurrency as requested.
+      AwesomeApiProvider.api = createHttpClient({
         baseURL: this.config.apiUrl,
         timeout: this.TIMEOUT,
         headers: {
           'x-api-key': this.config.apiToken,
         },
-        httpsAgent,
+        agentOptions: {
+          keepAliveMsecs: this.KEEP_ALIVE_MSECS,
+          maxSockets: this.MAX_SOCKETS,
+          maxFreeSockets: this.MAX_FREE_SOCKETS,
+          timeout: this.HTTPS_AGENT_TIMEOUT,
+        },
       })
     }
   }

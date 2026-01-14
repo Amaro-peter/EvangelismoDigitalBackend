@@ -3,6 +3,7 @@ import https from 'https'
 import { Redis } from 'ioredis'
 import { GeocodingProvider, GeoCoordinates, GeoSearchOptions, GeoPrecision } from './geo-provider.interface'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
+import { createHttpClient } from '@lib/http/axios'
 
 export interface LocationIqConfig {
   apiUrl: string
@@ -30,25 +31,29 @@ export class LocationIqProvider implements GeocodingProvider {
   private readonly MAX_RETRIES = 2
   private readonly BACKOFF_MS = 200
 
+  // Singleton Axios instance with optimized HTTPS Agent
+  private readonly KEEP_ALIVE_MSECS = 2000
+  private readonly MAX_SOCKETS = 2
+  private readonly MAX_FREE_SOCKETS = 2
+  private readonly TIMEOUT_AGENT = 90000
+
   constructor(
     redisConnection: Redis,
     private readonly config: LocationIqConfig,
   ) {
     this.redis = redisConnection
 
+    // Singleton initialization using the shared factory
     if (!LocationIqProvider.api) {
-      const httpsAgent = new https.Agent({
-        keepAlive: true,
-        keepAliveMsecs: 1000,
-        maxSockets: 2,
-        maxFreeSockets: 2,
-        timeout: 10000,
-      })
-
-      LocationIqProvider.api = axios.create({
+      LocationIqProvider.api = createHttpClient({
         baseURL: this.config.apiUrl,
         timeout: this.TIMEOUT,
-        httpsAgent,
+        agentOptions: {
+          keepAliveMsecs: this.KEEP_ALIVE_MSECS,
+          maxSockets: this.MAX_SOCKETS,
+          maxFreeSockets: this.MAX_FREE_SOCKETS,
+          timeout: this.TIMEOUT_AGENT,
+        },
       })
     }
   }
@@ -130,10 +135,10 @@ export class LocationIqProvider implements GeocodingProvider {
 
   private determinePrecision(item: LocationIqResponseItem): GeoPrecision {
     const type = item.type || item.class || ''
-    if (['house', 'building', 'apartments'].includes(type)) return 'ROOFTOP'
-    if (['residential', 'secondary', 'primary', 'road', 'highway'].includes(type)) return 'ROOFTOP'
-    if (['city', 'town', 'municipality'].includes(type)) return 'CITY'
-    return 'NEIGHBORHOOD'
+    if (['house', 'building', 'apartments'].includes(type)) return GeoPrecision.ROOFTOP
+    if (['residential', 'secondary', 'primary', 'road', 'highway'].includes(type)) return GeoPrecision.ROOFTOP
+    if (['city', 'town', 'municipality'].includes(type)) return GeoPrecision.CITY
+    return GeoPrecision.NEIGHBORHOOD
   }
 
   private sleep(ms: number) {

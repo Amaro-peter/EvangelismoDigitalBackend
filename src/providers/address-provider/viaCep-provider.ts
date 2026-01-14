@@ -3,6 +3,7 @@ import https from 'https'
 import { AddressData, AddressProvider } from './address-provider.interface'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 import { logger } from '@lib/logger'
+import { createHttpClient } from '@lib/http/axios'
 
 export interface ViaCepConfig {
   apiUrl: string
@@ -14,7 +15,8 @@ export class ViaCepProvider implements AddressProvider {
   private readonly MAX_RETRIES = 2
   private readonly BACKOFF_MS = 300
   private readonly VIACEP_TIMEOUT = 3000
-  private readonly KEEP_ALIVE = true
+
+  // HTTPS Agent Settings
   private readonly KEEP_ALIVE_MSECS = 1000
   private readonly MAX_SOCKETS = 2
   private readonly MAX_FREE_SOCKETS = 2
@@ -22,21 +24,15 @@ export class ViaCepProvider implements AddressProvider {
 
   constructor(private readonly config: ViaCepConfig) {
     if (!ViaCepProvider.api) {
-      const httpsAgent = new https.Agent({
-        keepAlive: this.KEEP_ALIVE,
-        keepAliveMsecs: this.KEEP_ALIVE_MSECS,
-        maxSockets: this.MAX_SOCKETS,
-        maxFreeSockets: this.MAX_FREE_SOCKETS,
-        timeout: this.HTTPS_AGENT_TIMEOUT,
-      })
-
-      ViaCepProvider.api = axios.create({
+      ViaCepProvider.api = createHttpClient({
         baseURL: this.config.apiUrl,
         timeout: this.VIACEP_TIMEOUT,
-        headers: {
-          'User-Agent': 'EvangelismoDigitalBackend/1.0 (contact@findhope.digital)',
+        agentOptions: {
+          keepAliveMsecs: this.KEEP_ALIVE_MSECS,
+          maxSockets: this.MAX_SOCKETS,
+          maxFreeSockets: this.MAX_FREE_SOCKETS,
+          timeout: this.HTTPS_AGENT_TIMEOUT,
         },
-        httpsAgent,
       })
     }
   }

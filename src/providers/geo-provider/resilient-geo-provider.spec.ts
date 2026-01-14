@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { EventEmitter } from 'events'
 import { ResilientGeoProvider } from './resilient-geo-provider'
-import { GeocodingProvider, GeoCoordinates, GeoSearchOptions } from './geo-provider.interface'
+import { GeocodingProvider, GeoCoordinates, GeoPrecision, GeoSearchOptions } from './geo-provider.interface'
 import { Redis } from 'ioredis'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { logger } from '@lib/logger'
@@ -71,7 +71,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
   // =========================================================================
 
   it('should return result from first provider on success', async () => {
-    const expectedResult: GeoCoordinates = { lat: -23.5, lon: -46.6, precision: 'ROOFTOP' }
+    const expectedResult: GeoCoordinates = { lat: -23.5, lon: -46.6, precision: GeoPrecision.ROOFTOP }
     vi.spyOn(mockProvider1, 'search').mockResolvedValue(expectedResult)
 
     const resilient = new ResilientGeoProvider([mockProvider1, mockProvider2], mockRedis as unknown as Redis)
@@ -83,7 +83,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
   })
 
   it('should fallback to second provider when first returns null', async () => {
-    const expectedResult: GeoCoordinates = { lat: -23.5, lon: -46.6, precision: 'CITY' }
+    const expectedResult: GeoCoordinates = { lat: -23.5, lon: -46.6, precision: GeoPrecision.CITY }
     vi.spyOn(mockProvider1, 'search').mockResolvedValue(null)
     vi.spyOn(mockProvider2, 'search').mockResolvedValue(expectedResult)
 
@@ -96,7 +96,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
   })
 
   it('should fallback to second provider when first throws error', async () => {
-    const expectedResult: GeoCoordinates = { lat: -23.5, lon: -46.6, precision: 'CITY' }
+    const expectedResult: GeoCoordinates = { lat: -23.5, lon: -46.6, precision: GeoPrecision.CITY }
     vi.spyOn(mockProvider1, 'search').mockRejectedValue(new Error('Network error'))
     vi.spyOn(mockProvider2, 'search').mockResolvedValue(expectedResult)
 
@@ -127,7 +127,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
   })
 
   it('should use cached result without calling providers', async () => {
-    const cachedResult: GeoCoordinates = { lat: -23.5, lon: -46.6, precision: 'ROOFTOP' }
+    const cachedResult: GeoCoordinates = { lat: -23.5, lon: -46.6, precision: GeoPrecision.ROOFTOP }
     vi.spyOn(mockRedis, 'get').mockResolvedValue(JSON.stringify(cachedResult))
 
     const resilient = new ResilientGeoProvider([mockProvider1, mockProvider2], mockRedis as unknown as Redis)
@@ -143,7 +143,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
 
   it('should write to cache when provider returns a result', async () => {
     const query = 'Cacheable Address'
-    const expectedResult: GeoCoordinates = { lat: 10, lon: 20, precision: 'ROOFTOP' }
+    const expectedResult: GeoCoordinates = { lat: 10, lon: 20, precision: GeoPrecision.ROOFTOP }
     vi.spyOn(mockProvider1, 'search').mockResolvedValue(expectedResult)
 
     const resilient = new ResilientGeoProvider([mockProvider1, mockProvider2], mockRedis as unknown as Redis)
@@ -182,7 +182,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
 
   it('should handle searchStructured, call providers and cache with structured params', async () => {
     const options: GeoSearchOptions = { street: 'Main', city: 'Metropolis' } as any
-    const expectedResult: GeoCoordinates = { lat: 3, lon: 4, precision: 'ROOFTOP' }
+    const expectedResult: GeoCoordinates = { lat: 3, lon: 4, precision: GeoPrecision.ROOFTOP }
     vi.spyOn(mockProvider1, 'searchStructured').mockResolvedValue(expectedResult)
 
     const resilient = new ResilientGeoProvider([mockProvider1, mockProvider2], mockRedis as unknown as Redis)
@@ -199,7 +199,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
 
   it('should return cached structured result without calling providers', async () => {
     const options: GeoSearchOptions = { street: 'Baker', city: 'London' } as any
-    const cachedResult: GeoCoordinates = { lat: 51.5, lon: -0.1, precision: 'CITY' }
+    const cachedResult: GeoCoordinates = { lat: 51.5, lon: -0.1, precision: GeoPrecision.CITY }
 
     // Mock cache hit
     vi.spyOn(mockRedis, 'get').mockResolvedValue(JSON.stringify(cachedResult))
@@ -219,7 +219,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
     const options1: GeoSearchOptions = { city: 'São Paulo', state: undefined } as any
     const options2: GeoSearchOptions = { city: 'São Paulo' } as any
 
-    const expectedResult: GeoCoordinates = { lat: -23.5, lon: -46.6, precision: 'CITY' }
+    const expectedResult: GeoCoordinates = { lat: -23.5, lon: -46.6, precision: GeoPrecision.CITY }
     vi.spyOn(mockProvider1, 'searchStructured').mockResolvedValue(expectedResult)
 
     const resilient = new ResilientGeoProvider([mockProvider1], mockRedis as unknown as Redis)
@@ -243,7 +243,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
     const options1 = { a: 1, b: 2, c: 3 }
     const options2 = { c: 3, a: 1, b: 2 }
 
-    const expectedResult: GeoCoordinates = { lat: 1, lon: 2, precision: 'CITY' }
+    const expectedResult: GeoCoordinates = { lat: 1, lon: 2, precision: GeoPrecision.CITY }
     vi.spyOn(mockProvider1, 'searchStructured').mockResolvedValue(expectedResult)
 
     const resilient = new ResilientGeoProvider([mockProvider1], mockRedis as unknown as Redis)
@@ -274,7 +274,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
   })
 
   it('should continue if redis.set throws (write failure)', async () => {
-    const expectedResult: GeoCoordinates = { lat: 1, lon: 2, precision: 'CITY' }
+    const expectedResult: GeoCoordinates = { lat: 1, lon: 2, precision: GeoPrecision.CITY }
     vi.spyOn(mockProvider1, 'search').mockResolvedValue(expectedResult)
 
     // Make set fail for cache writes but succeed for locks
@@ -291,18 +291,18 @@ describe('ResilientGeoProvider Unit Tests', () => {
 
   it('should handle redis.get returning invalid JSON', async () => {
     vi.spyOn(mockRedis, 'get').mockResolvedValue('invalid json{')
-    vi.spyOn(mockProvider1, 'search').mockResolvedValue({ lat: 1, lon: 2, precision: 'CITY' })
+    vi.spyOn(mockProvider1, 'search').mockResolvedValue({ lat: 1, lon: 2, precision: GeoPrecision.CITY })
 
     const resilient = new ResilientGeoProvider([mockProvider1], mockRedis as unknown as Redis)
     const result = await resilient.search('Test')
 
-    expect(result).toEqual({ lat: 1, lon: 2, precision: 'CITY' })
+    expect(result).toEqual({ lat: 1, lon: 2, precision: GeoPrecision.CITY })
     expect(mockProvider1.search).toHaveBeenCalled()
   })
 
   it('should differentiate cache keys between search and searchStructured', async () => {
-    const coords1: GeoCoordinates = { lat: 1, lon: 2, precision: 'CITY' }
-    const coords2: GeoCoordinates = { lat: 3, lon: 4, precision: 'ROOFTOP' }
+    const coords1: GeoCoordinates = { lat: 1, lon: 2, precision: GeoPrecision.CITY }
+    const coords2: GeoCoordinates = { lat: 3, lon: 4, precision: GeoPrecision.ROOFTOP }
 
     vi.spyOn(mockProvider1, 'search').mockResolvedValue(coords1)
     vi.spyOn(mockProvider1, 'searchStructured').mockResolvedValue(coords2)
@@ -320,7 +320,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
 
   it('should log errors but not throw when cache write fails', async () => {
     const logSpy = vi.spyOn(logger, 'error')
-    const expectedResult: GeoCoordinates = { lat: 1, lon: 2, precision: 'CITY' }
+    const expectedResult: GeoCoordinates = { lat: 1, lon: 2, precision: GeoPrecision.CITY }
 
     vi.spyOn(mockProvider1, 'search').mockResolvedValue(expectedResult)
     vi.spyOn(mockRedis, 'set').mockImplementation(async (key: any) => {
@@ -379,7 +379,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
       const resilient = new ResilientGeoProvider([mockProvider1], mockRedis as unknown as Redis)
 
       vi.spyOn(mockRedis, 'get').mockResolvedValue(null)
-      vi.spyOn(mockProvider1, 'search').mockResolvedValueOnce({ lat: 1, lon: 2, precision: 'CITY' })
+      vi.spyOn(mockProvider1, 'search').mockResolvedValueOnce({ lat: 1, lon: 2, precision: GeoPrecision.CITY })
 
       const result1 = await resilient.search('Miss')
       expect(mockProvider1.search).toHaveBeenCalledTimes(1)
@@ -402,7 +402,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
   describe('Degraded Mode (High Availability)', () => {
     it('should continue and cache result even if redis.get throws', async () => {
       const query = 'RedisGetError Address'
-      const expectedResult: GeoCoordinates = { lat: 1, lon: 2, precision: 'CITY' }
+      const expectedResult: GeoCoordinates = { lat: 1, lon: 2, precision: GeoPrecision.CITY }
       vi.spyOn(mockRedis, 'get').mockRejectedValue(new Error('Redis down'))
       vi.spyOn(mockProvider1, 'search').mockResolvedValue(expectedResult)
 
@@ -422,7 +422,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
       const error = new Error('Connection Timeout')
       mockRedis.get.mockRejectedValue(error)
 
-      const expectedResult = { lat: 10, lon: 10, precision: 'ROOFTOP' }
+      const expectedResult = { lat: 10, lon: 10, precision: GeoPrecision.ROOFTOP }
       vi.mocked(mockProvider1.search).mockResolvedValue(expectedResult as any)
 
       const resilient = new ResilientGeoProvider([mockProvider1], mockRedis as unknown as Redis)
@@ -450,7 +450,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
   describe('Distributed Locking & Concurrency', () => {
     it('should acquire lock and prevent race condition on cache miss', async () => {
       const query = 'Concurrent Address'
-      const expectedResult: GeoCoordinates = { lat: 10, lon: 20, precision: 'ROOFTOP' }
+      const expectedResult: GeoCoordinates = { lat: 10, lon: 20, precision: GeoPrecision.ROOFTOP }
 
       vi.spyOn(mockProvider1, 'search').mockResolvedValue(expectedResult)
 
@@ -470,7 +470,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
       // Process B reads cache.
 
       const query = 'Locked Address'
-      const cachedResult: GeoCoordinates = { lat: 5, lon: 10, precision: 'CITY' }
+      const cachedResult: GeoCoordinates = { lat: 5, lon: 10, precision: GeoPrecision.CITY }
 
       // 1. Initial Cache Miss
       mockRedis.get.mockResolvedValueOnce(null)
@@ -516,7 +516,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
     it('should timeout and proceed without lock after max wait time', async () => {
       vi.useFakeTimers()
       const query = 'Timeout Address'
-      const expectedResult: GeoCoordinates = { lat: 15, lon: 25, precision: 'ROOFTOP' }
+      const expectedResult: GeoCoordinates = { lat: 15, lon: 25, precision: GeoPrecision.ROOFTOP }
 
       mockRedis.get.mockResolvedValue(null) // Miss
       mockRedis.set.mockResolvedValue(null) // Lock busy
@@ -544,7 +544,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
 
     it('should handle lock acquisition Redis error (fail-open)', async () => {
       const query = 'Lock Redis Error'
-      const expectedResult: GeoCoordinates = { lat: 30, lon: 40, precision: 'CITY' }
+      const expectedResult: GeoCoordinates = { lat: 30, lon: 40, precision: GeoPrecision.CITY }
 
       // Cache miss
       mockRedis.get.mockResolvedValue(null)
@@ -568,7 +568,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
     it('should use Lua script to atomically delete lock and publish release', async () => {
       mockRedis.get.mockResolvedValue(null)
       mockRedis.set.mockResolvedValue('OK')
-      vi.mocked(mockProvider1.search).mockResolvedValue({ lat: 1, lon: 1, precision: 'CITY' })
+      vi.mocked(mockProvider1.search).mockResolvedValue({ lat: 1, lon: 1, precision: GeoPrecision.CITY })
 
       const resilient = new ResilientGeoProvider([mockProvider1], mockRedis as unknown as Redis)
       await resilient.search('Lua Test')
@@ -604,7 +604,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
 
   describe('Logging', () => {
     it('should log debug message on cache hit', async () => {
-      const cachedResult: GeoCoordinates = { lat: 55, lon: 65, precision: 'CITY' }
+      const cachedResult: GeoCoordinates = { lat: 55, lon: 65, precision: GeoPrecision.CITY }
       vi.spyOn(mockRedis, 'get').mockResolvedValue(JSON.stringify(cachedResult))
 
       const logSpy = vi.spyOn(logger, 'debug')
@@ -618,7 +618,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
     })
 
     it('should log info on successful geocoding', async () => {
-      const expectedResult: GeoCoordinates = { lat: 60, lon: 70, precision: 'ROOFTOP' }
+      const expectedResult: GeoCoordinates = { lat: 60, lon: 70, precision: GeoPrecision.ROOFTOP }
       vi.spyOn(mockProvider1, 'search').mockResolvedValue(expectedResult)
 
       const logSpy = vi.spyOn(logger, 'info')
@@ -632,7 +632,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
     })
 
     it('should log cache metadata when caching results', async () => {
-      const expectedResult: GeoCoordinates = { lat: 65, lon: 75, precision: 'CITY' }
+      const expectedResult: GeoCoordinates = { lat: 65, lon: 75, precision: GeoPrecision.CITY }
       vi.spyOn(mockProvider1, 'search').mockResolvedValue(expectedResult)
 
       const logSpy = vi.spyOn(logger, 'debug')
