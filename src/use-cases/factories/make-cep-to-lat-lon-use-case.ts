@@ -8,8 +8,16 @@ import { ResilientGeoProvider } from 'providers/geo-provider/resilient-geo-provi
 import { redisConnection } from '@lib/redis/connection'
 import { env } from '@env/index'
 
+// 1. Variable to hold the singleton instance
+let cachedUseCase: CepToLatLonUseCase | null = null
+
 export function makeCepToLatLonUseCase() {
-  // 1. Setup Geocoding Providers (Stateless/Rate-Limited only)
+  // 2. Return the existing instance if it has already been created
+  if (cachedUseCase) {
+    return cachedUseCase
+  }
+
+  // Setup Geocoding Providers
   const nominatimProvider = new NominatimGeoProvider(redisConnection, {
     apiUrl: env.NOMINATIM_API_URL,
   })
@@ -19,13 +27,10 @@ export function makeCepToLatLonUseCase() {
     apiToken: env.LOCATION_IQ_API_TOKEN,
   })
 
-  // 2. Setup Resilient Geo Strategy (Centralized Caching here)
-  const resilientGeoProvider = new ResilientGeoProvider(
-    [locationIqProvider, nominatimProvider],
-    redisConnection, // Inject Redis for the unified cache
-  )
+  // Setup Resilient Geo Strategy
+  const resilientGeoProvider = new ResilientGeoProvider([locationIqProvider, nominatimProvider], redisConnection)
 
-  // 3. Setup Address Providers
+  // Setup Address Providers
   const awesomeApiProvider = new AwesomeApiProvider({
     apiUrl: env.AWESOME_API_URL,
     apiToken: env.AWESOME_API_TOKEN,
@@ -37,8 +42,9 @@ export function makeCepToLatLonUseCase() {
 
   const resilientAddressProvider = new ResilientAddressProvider([awesomeApiProvider, viaCepProvider], redisConnection)
 
-  // 4. Create Use Case (L1 Cache)
-  const cepToLatLonUseCase = new CepToLatLonUseCase(resilientGeoProvider, resilientAddressProvider, redisConnection)
+  // Create Use Case
+  cachedUseCase = new CepToLatLonUseCase(resilientGeoProvider, resilientAddressProvider, redisConnection)
 
-  return cepToLatLonUseCase
+  // 3. Return the new singleton
+  return cachedUseCase
 }
