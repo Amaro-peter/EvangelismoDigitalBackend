@@ -1,5 +1,4 @@
-import axios, { AxiosInstance, AxiosError } from 'axios'
-import https from 'https'
+import { AxiosInstance, AxiosError } from 'axios'
 import { Redis } from 'ioredis'
 import { GeocodingProvider, GeoCoordinates, GeoSearchOptions, GeoPrecision } from './geo-provider.interface'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'

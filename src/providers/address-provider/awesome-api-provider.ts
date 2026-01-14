@@ -1,5 +1,4 @@
-import axios, { AxiosError, AxiosInstance } from 'axios'
-import https from 'https'
+import { AxiosError, AxiosInstance } from 'axios'
 import { AddressData, AddressProvider } from './address-provider.interface'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 import { logger } from '@lib/logger'
