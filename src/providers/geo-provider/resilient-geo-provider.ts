@@ -15,11 +15,10 @@ export class ResilientGeoProvider implements GeocodingProvider {
       throw new Error('ResilientGeoProvider requires at least one provider')
     }
 
-    // Initialize the cache helper
     this.cacheManager = new ResilientCache(redis, {
       prefix: 'cache:geocoding:',
       defaultTtlSeconds: 60 * 60 * 24 * 90, // 90 days
-      negativeTtlSeconds: 60 * 60, // 1 hour (Smart Negative Caching)
+      negativeTtlSeconds: 60 * 60, // 1 hour
     })
   }
 
@@ -46,7 +45,7 @@ export class ResilientGeoProvider implements GeocodingProvider {
     action: (provider: GeocodingProvider) => Promise<GeoCoordinates | null>,
   ): Promise<GeoCoordinates | null> {
     let lastError: unknown = null
-    let notFoundCount = 0
+    let hasSystemError = false // [FIX] Track if any system error occurred
 
     for (const [index, provider] of this.providers.entries()) {
       const providerName = provider.constructor.name
@@ -54,18 +53,15 @@ export class ResilientGeoProvider implements GeocodingProvider {
       try {
         const result = await action(provider)
 
-        // SUCCESS: Provider found coordinates
         if (result !== null) {
           logger.info({ provider: providerName }, 'Geocoding successful')
           return result
         }
 
-        // LOGIC FAIL: Provider returned null (Semantic "Not Found")
-        // We do NOT return immediately; we try other providers in case one has better data.
-        notFoundCount++
         logger.warn({ provider: providerName }, 'Provider returned no results (Not Found)')
       } catch (error) {
-        // SYSTEM FAIL: Provider threw error (Network, Rate Limit, etc.)
+        // SYSTEM FAIL: Record that a system error occurred
+        hasSystemError = true
         lastError = error
         const errMsg = error instanceof Error ? error.message : String(error)
 
@@ -79,18 +75,16 @@ export class ResilientGeoProvider implements GeocodingProvider {
 
     // === DECISION PHASE ===
 
-    // Case A: At least one provider said "Not Found" (and no one succeeded).
-    // We treat this as a confirmed "Not Found".
-    // Return NULL -> ResilientCache saves a Negative Cache Entry (1 hour).
-    if (notFoundCount > 0) {
-      logger.warn({ notFoundCount }, 'Geocoding confirmed as "Not Found" by providers')
-      return null
+    // [FIX] If ANY provider failed with a system error, we cannot trust a "Not Found" result
+    // from other providers (which might be weaker fallbacks). We must THROW to abort caching.
+    if (hasSystemError) {
+      logger.error({ lastError }, 'Geocoding failed with system errors (aborting cache)')
+      throw lastError || new Error('All geocoding providers failed')
     }
 
-    // Case B: All providers failed with System Errors (no one said "Not Found").
-    // We DO NOT return null (which would poison the cache).
-    // Throw LAST ERROR -> ResilientCache aborts saving anything.
-    logger.error({ lastError }, 'All geocoding providers failed with system errors')
-    throw lastError || new Error('All geocoding providers failed')
+    // If we are here, it means ALL providers ran successfully and returned NULL.
+    // It is safe to negative cache this.
+    logger.warn('Geocoding confirmed as "Not Found" by all providers')
+    return null
   }
 }
