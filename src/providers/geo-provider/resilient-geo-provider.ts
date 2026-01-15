@@ -2,7 +2,7 @@ import { Redis } from 'ioredis'
 import { GeoCacheScope, GeocodingProvider, GeoCoordinates, GeoSearchOptions } from './geo-provider.interface'
 import { logger } from '@lib/logger'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
-import { ResilientCache } from '@lib/redis/resilient-cache'
+import { ResilientCache } from '@lib/redis/helper/resilient-cache'
 
 export class ResilientGeoProvider implements GeocodingProvider {
   private readonly cacheManager: ResilientCache
@@ -54,11 +54,11 @@ export class ResilientGeoProvider implements GeocodingProvider {
         const result = await action(provider)
 
         if (result !== null) {
-          logger.info({ provider: providerName }, 'Geocoding successful')
+          logger.info({ provider: providerName }, 'Geocodificação obtida com sucesso por um provedor de geocodificação')
           return result
         }
 
-        logger.warn({ provider: providerName }, 'Provider returned no results (Not Found)')
+        logger.warn({ provider: providerName }, 'Provedor retornou sem resultados (Não Encontrado)')
       } catch (error) {
         // SYSTEM FAIL: Record that a system error occurred
         hasSystemError = true
@@ -66,9 +66,12 @@ export class ResilientGeoProvider implements GeocodingProvider {
         const errMsg = error instanceof Error ? error.message : String(error)
 
         if (error instanceof GeoServiceBusyError) {
-          logger.warn({ provider: providerName, attempt: index + 1 }, 'Provider is busy (Rate Limit). Switching...')
+          logger.warn(
+            { provider: providerName, attempt: index + 1 },
+            'Provedor está ocupado (Limite de Taxa). Alternando...',
+          )
         } else {
-          logger.warn({ provider: providerName, error: errMsg }, 'Provider failed (System Error). Switching...')
+          logger.warn({ provider: providerName, error: errMsg }, 'Provedor falhou (Erro de Sistema). Alternando...')
         }
       }
     }
@@ -78,13 +81,13 @@ export class ResilientGeoProvider implements GeocodingProvider {
     // [FIX] If ANY provider failed with a system error, we cannot trust a "Not Found" result
     // from other providers (which might be weaker fallbacks). We must THROW to abort caching.
     if (hasSystemError) {
-      logger.error({ lastError }, 'Geocoding failed with system errors (aborting cache)')
-      throw lastError || new Error('All geocoding providers failed')
+      logger.error({ lastError }, 'Geocodificação falhou com erros de sistema (abortando cache)')
+      throw lastError || new Error('Todos os provedores de geocodificação falharam')
     }
 
     // If we are here, it means ALL providers ran successfully and returned NULL.
     // It is safe to negative cache this.
-    logger.warn('Geocoding confirmed as "Not Found" by all providers')
+    logger.warn('Geocodificação falhou para todos os provedores')
     return null
   }
 }

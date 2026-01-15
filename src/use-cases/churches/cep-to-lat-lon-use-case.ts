@@ -4,7 +4,7 @@ import { AddressProvider } from 'providers/address-provider/address-provider.int
 import { GeocodingProvider, GeoCoordinates, GeoPrecision } from 'providers/geo-provider/geo-provider.interface'
 import { Redis } from 'ioredis'
 import { logger } from '@lib/logger'
-import { ResilientCache } from '@lib/redis/resilient-cache'
+import { ResilientCache } from '@lib/redis/helper/resilient-cache'
 import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
 
 interface CepToLatLonRequest {

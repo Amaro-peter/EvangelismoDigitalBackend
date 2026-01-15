@@ -14,6 +14,8 @@ export class ResilientCache {
   private readonly LOCK_TTL_MS: number
   private readonly MAX_WAIT_TIME_MS: number
   private subClient: Redis | null = null
+  // [FIX] In-memory map to coalesce concurrent fetches for the same key
+  private readonly pendingFetches = new Map<string, Promise<any>>()
 
   constructor(
     private readonly redis: Redis,
@@ -23,14 +25,9 @@ export class ResilientCache {
     this.MAX_WAIT_TIME_MS = options.maxWaitTimeMs || 10_000
   }
 
-  /**
-   * Generates a consistent cache key by sorting object keys and hashing content.
-   * Filters out null/undefined values.
-   */
   generateKey(params: Record<string, any>): string {
     const cleanedParams = Object.keys(params)
       .filter((key) => {
-        // Preserve specific keys if needed, or just filter empty
         const value = params[key]
         return value !== undefined && value !== null && value !== ''
       })
@@ -49,10 +46,30 @@ export class ResilientCache {
   }
 
   /**
-   * Main entry point: Tries to get from cache, handles locking if missing,
-   * fetches new data if lock acquired, or waits/falls back.
+   * Main entry point with In-Memory Request Coalescing.
+   * This prevents cache stampedes even if Redis is completely down.
    */
   async getOrFetch<T>(cacheKey: string, fetcher: () => Promise<T | null>): Promise<T | null> {
+    // [FIX] Check in-memory pending fetches first
+    if (this.pendingFetches.has(cacheKey)) {
+      logger.debug({ cacheKey }, 'Joining in-flight fetch (Request Coalescing)')
+      return this.pendingFetches.get(cacheKey) as Promise<T | null>
+    }
+
+    const promise = this.executeGetOrFetch(cacheKey, fetcher)
+
+    // Store the promise in memory so others can join
+    this.pendingFetches.set(cacheKey, promise)
+
+    try {
+      return await promise
+    } finally {
+      // Clean up memory map after completion
+      this.pendingFetches.delete(cacheKey)
+    }
+  }
+
+  private async executeGetOrFetch<T>(cacheKey: string, fetcher: () => Promise<T | null>): Promise<T | null> {
     // 1. Try Cache First
     let redisHealthy = true
     try {
@@ -60,7 +77,11 @@ export class ResilientCache {
       if (cached !== null) {
         const parsed = this.parseCache<T>(cached, cacheKey)
         if (parsed !== undefined) {
-          logger.debug({ cacheKey }, 'Cache hit')
+          const isNegativeCache = parsed === null
+          logger.info(
+            { cacheKey, isNegativeCache },
+            `✓ Cache HIT - ${isNegativeCache ? 'Negative cache' : 'Data cached'}`,
+          )
           return parsed
         }
       }
@@ -69,6 +90,8 @@ export class ResilientCache {
       redisHealthy = false
     }
 
+    // [FIX] If Redis is down, we proceed to fetcher, but now we are protected
+    // by the pendingFetches map in the wrapper function, preventing a stampede.
     if (!redisHealthy) {
       return fetcher()
     }
@@ -79,7 +102,6 @@ export class ResilientCache {
     const lockAcquired = await this.acquireLock(lockKey, lockToken)
 
     if (!lockAcquired) {
-      // Wait for the lock holder to finish (Event-Driven)
       return this.waitForCacheOrFallback(cacheKey, lockKey, fetcher)
     }
 
@@ -90,7 +112,11 @@ export class ResilientCache {
         if (recheck !== null) {
           const parsed = this.parseCache<T>(recheck, cacheKey)
           if (parsed !== undefined) {
-            logger.debug({ cacheKey }, 'Cache populated while acquiring lock')
+            const isNegativeCache = parsed === null
+            logger.info(
+              { cacheKey, isNegativeCache },
+              `✓ Cache HIT (double-check) - ${isNegativeCache ? 'Negative cache' : 'Data cached'}`,
+            )
             return parsed
           }
         }
@@ -126,13 +152,12 @@ export class ResilientCache {
       return result === 'OK'
     } catch (err) {
       logger.warn({ err, lockKey }, 'Redis error acquiring lock - proceeding degraded')
-      return true // Assume acquired to allow execution if Redis is glitchy
+      return true
     }
   }
 
   private async releaseLock(lockKey: string, token: string): Promise<void> {
     try {
-      // Lua script: Deletes lock AND publishes release event atomically
       const script = `
         if redis.call("get", KEYS[1]) == ARGV[1] then
           local del = redis.call("del", KEYS[1])
@@ -168,14 +193,20 @@ export class ResilientCache {
       try {
         const lockExists = await this.redis.exists(lockKey)
         if (lockExists === 0) {
-          // Lock released! Check cache.
           const cached = await this.redis.get(cacheKey)
           if (cached !== null) {
             const parsed = this.parseCache<T>(cached, cacheKey)
-            if (parsed !== undefined) return parsed
+            if (parsed !== undefined) {
+              const isNegativeCache = parsed === null
+              const waitTime = Date.now() - start
+              logger.info(
+                { cacheKey, isNegativeCache, waitTimeMs: waitTime },
+                `✓ Cache HIT (after wait) - ${isNegativeCache ? 'Negative cache' : 'Data cached'}`,
+              )
+              return parsed
+            }
           }
 
-          // No cache? Try to acquire lock ourselves
           const fallbackResult = await this.tryAcquireAndFetch(cacheKey, lockKey, fetcher)
           if (fallbackResult !== undefined) return fallbackResult
         }
@@ -184,9 +215,8 @@ export class ResilientCache {
         break
       }
 
-      // Wait for Notification (Event-driven sleep)
       await new Promise<void>((resolve) => {
-        const timeout = setTimeout(() => resolve(), 2000) // 2s fallback heartbeat
+        const timeout = setTimeout(() => resolve(), 2000)
         sub.once('message', (ch, msg) => {
           if (ch === channel && msg === 'released') {
             clearTimeout(timeout)
@@ -212,11 +242,17 @@ export class ResilientCache {
       if (result !== 'OK') return undefined
 
       try {
-        // Last check
         const cached = await this.redis.get(cacheKey)
         if (cached !== null) {
           const parsed = this.parseCache<T>(cached, cacheKey)
-          if (parsed !== undefined) return parsed
+          if (parsed !== undefined) {
+            const isNegativeCache = parsed === null
+            logger.info(
+              { cacheKey, isNegativeCache },
+              `✓ Cache HIT (fallback) - ${isNegativeCache ? 'Negative cache' : 'Data cached'}`,
+            )
+            return parsed
+          }
         }
 
         const res = await fetcher()
@@ -235,13 +271,8 @@ export class ResilientCache {
       const isNegativeCache = result === null
       const ttl = isNegativeCache ? this.options.negativeTtlSeconds : this.options.defaultTtlSeconds
 
-      // Log cache metadata before saving
       logger.debug(
-        {
-          cacheKey,
-          isNegativeCache,
-          ttl,
-        },
+        { cacheKey, isNegativeCache, ttl },
         `Caching ${isNegativeCache ? 'negative result' : 'result'} with ${Math.round(ttl / 86400)}d TTL`,
       )
 

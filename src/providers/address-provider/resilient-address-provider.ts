@@ -2,7 +2,7 @@ import { Redis } from 'ioredis'
 import { AddressData, AddressProvider } from './address-provider.interface'
 import { logger } from '@lib/logger'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
-import { ResilientCache } from '@lib/redis/resilient-cache'
+import { ResilientCache } from '@lib/redis/helper/resilient-cache'
 
 enum AddressCacheScope {
   CEP = 'cep',
@@ -57,7 +57,7 @@ export class ResilientAddressProvider implements AddressProvider {
         const result = await provider.fetchAddress(cep)
 
         if (result) {
-          logger.info({ provider: providerName }, 'Address found successfully')
+          logger.info({ provider: providerName }, 'Endereço obtido com sucesso por um provedor de endereço')
           return result
         }
       } catch (error) {
@@ -72,7 +72,7 @@ export class ResilientAddressProvider implements AddressProvider {
         lastError = error as Error
         logger.warn(
           { provider: providerName, error: lastError.message },
-          'Provider failed (System Error). Switching to fallback...',
+          'Provedor falhou (Erro de Sistema). Alternando para fallback...',
         )
       }
     }
@@ -82,13 +82,13 @@ export class ResilientAddressProvider implements AddressProvider {
     // [FIX] Abort cache if system errors occurred.
     // We only return null (Negative Cache) if strictly NO system errors happened.
     if (hasSystemError) {
-      logger.error({ cep, lastError }, 'Address providers failed with system errors (aborting cache)')
-      throw lastError || new Error('All address providers failed')
+      logger.error({ cep, lastError }, 'Provedores de endereço falharam com erros de sistema (abortando cache)')
+      throw lastError || new Error('Todos os provedores de endereço falharam')
     }
 
     // If we reached here, all providers either returned null (unlikely for address)
     // or threw InvalidCepError.
-    logger.warn({ cep }, 'CEP confirmed as invalid by providers')
+    logger.warn({ cep }, 'CEP confirmado como inválido pelos provedores')
     return null
   }
 }
