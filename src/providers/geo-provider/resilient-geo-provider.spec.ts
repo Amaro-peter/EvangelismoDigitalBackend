@@ -333,7 +333,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
     await expect(resilient.search('Test')).resolves.toEqual(expectedResult)
     expect(logSpy).toHaveBeenCalledWith(
       expect.objectContaining({ err: expect.any(Error) }),
-      expect.stringContaining('Redis error writing'),
+      expect.stringContaining('Erro no Redis ao gravar cache'), // Changed to Portuguese
     )
   })
 
@@ -438,7 +438,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
       // Warning must be logged
       expect(logger.warn).toHaveBeenCalledWith(
         expect.objectContaining({ err: error }),
-        expect.stringContaining('Redis unavailable'),
+        expect.stringContaining('Redis indisponível'), // Changed to Portuguese
       )
     })
   })
@@ -538,7 +538,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
 
       expect(logSpy).toHaveBeenCalledWith(
         expect.objectContaining({ cacheKey: expect.any(String) }),
-        expect.stringContaining('Lock wait timeout'),
+        expect.stringContaining('Timeout de espera do lock'), // Changed to Portuguese
       )
     })
 
@@ -561,7 +561,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
       expect(mockProvider1.search).toHaveBeenCalled()
       expect(logSpy).toHaveBeenCalledWith(
         expect.objectContaining({ err: expect.any(Error) }),
-        expect.stringContaining('Redis error acquiring lock'),
+        expect.stringContaining('Erro no Redis ao adquirir lock'), // Changed to Portuguese
       )
     })
 
@@ -607,13 +607,13 @@ describe('ResilientGeoProvider Unit Tests', () => {
       const cachedResult: GeoCoordinates = { lat: 55, lon: 65, precision: GeoPrecision.CITY }
       vi.spyOn(mockRedis, 'get').mockResolvedValue(JSON.stringify(cachedResult))
 
-      const logSpy = vi.spyOn(logger, 'debug')
+      const logSpy = vi.spyOn(logger, 'info') // Changed from 'debug' to 'info'
       const resilient = new ResilientGeoProvider([mockProvider1], mockRedis as unknown as Redis)
       await resilient.search('Cached')
 
       expect(logSpy).toHaveBeenCalledWith(
         expect.objectContaining({ cacheKey: expect.any(String) }),
-        expect.stringContaining('Cache hit'),
+        expect.stringContaining('Cache HIT'), // Updated to match actual log message
       )
     })
 
@@ -627,7 +627,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
 
       expect(logSpy).toHaveBeenCalledWith(
         expect.objectContaining({ provider: 'Object' }),
-        expect.stringContaining('Geocoding successful'),
+        expect.stringContaining('Geocodificação obtida com sucesso'), // Updated to match actual Portuguese message
       )
     })
 
@@ -645,7 +645,7 @@ describe('ResilientGeoProvider Unit Tests', () => {
           isNegativeCache: false,
           ttl: CACHE_TTL_SECONDS,
         }),
-        expect.stringContaining('90d TTL'),
+        expect.stringContaining('Armazenando resultado em cache com TTL de 90d'), // Changed to Portuguese
       )
     })
   })

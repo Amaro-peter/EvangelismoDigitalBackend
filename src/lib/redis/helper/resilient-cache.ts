@@ -14,7 +14,7 @@ export class ResilientCache {
   private readonly LOCK_TTL_MS: number
   private readonly MAX_WAIT_TIME_MS: number
   private subClient: Redis | null = null
-  // [FIX] In-memory map to coalesce concurrent fetches for the same key
+  // [FIX] Mapa em memória para coalescer buscas simultâneas para a mesma chave
   private readonly pendingFetches = new Map<string, Promise<any>>()
 
   constructor(
@@ -46,31 +46,31 @@ export class ResilientCache {
   }
 
   /**
-   * Main entry point with In-Memory Request Coalescing.
-   * This prevents cache stampedes even if Redis is completely down.
+   * Ponto de entrada principal com Request Coalescing em Memória.
+   * Isso previne cache stampedes mesmo se o Redis estiver completamente indisponível.
    */
   async getOrFetch<T>(cacheKey: string, fetcher: () => Promise<T | null>): Promise<T | null> {
-    // [FIX] Check in-memory pending fetches first
+    // [FIX] Verifica primeiro as buscas pendentes em memória
     if (this.pendingFetches.has(cacheKey)) {
-      logger.debug({ cacheKey }, 'Joining in-flight fetch (Request Coalescing)')
+      logger.debug({ cacheKey }, 'Unindo busca em andamento (Request Coalescing)')
       return this.pendingFetches.get(cacheKey) as Promise<T | null>
     }
 
     const promise = this.executeGetOrFetch(cacheKey, fetcher)
 
-    // Store the promise in memory so others can join
+    // Armazena a promise em memória para que outras possam se unir
     this.pendingFetches.set(cacheKey, promise)
 
     try {
       return await promise
     } finally {
-      // Clean up memory map after completion
+      // Limpa o mapa de memória após conclusão
       this.pendingFetches.delete(cacheKey)
     }
   }
 
   private async executeGetOrFetch<T>(cacheKey: string, fetcher: () => Promise<T | null>): Promise<T | null> {
-    // 1. Try Cache First
+    // 1. Tenta Cache Primeiro
     let redisHealthy = true
     try {
       const cached = await this.redis.get(cacheKey)
@@ -80,23 +80,23 @@ export class ResilientCache {
           const isNegativeCache = parsed === null
           logger.info(
             { cacheKey, isNegativeCache },
-            `✓ Cache HIT - ${isNegativeCache ? 'Negative cache' : 'Data cached'}`,
+            `✓ Cache HIT - ${isNegativeCache ? 'Cache negativo' : 'Dados em cache'}`,
           )
           return parsed
         }
       }
     } catch (err) {
-      logger.warn({ err, cacheKey }, 'Redis unavailable - bypassing cache')
+      logger.warn({ err, cacheKey }, 'Redis indisponível - ignorando cache')
       redisHealthy = false
     }
 
-    // [FIX] If Redis is down, we proceed to fetcher, but now we are protected
-    // by the pendingFetches map in the wrapper function, preventing a stampede.
+    // [FIX] Se o Redis estiver indisponível, prosseguimos para o fetcher, mas agora estamos protegidos
+    // pelo mapa pendingFetches na função wrapper, prevenindo um stampede.
     if (!redisHealthy) {
       return fetcher()
     }
 
-    // 2. Acquire Distributed Lock
+    // 2. Adquire Lock Distribuído
     const lockKey = `${cacheKey}:lock`
     const lockToken = crypto.randomBytes(16).toString('hex')
     const lockAcquired = await this.acquireLock(lockKey, lockToken)
@@ -106,7 +106,7 @@ export class ResilientCache {
     }
 
     try {
-      // 3. Double-check cache (Double-Checked Locking)
+      // 3. Verifica cache novamente (Double-Checked Locking)
       try {
         const recheck = await this.redis.get(cacheKey)
         if (recheck !== null) {
@@ -115,24 +115,24 @@ export class ResilientCache {
             const isNegativeCache = parsed === null
             logger.info(
               { cacheKey, isNegativeCache },
-              `✓ Cache HIT (double-check) - ${isNegativeCache ? 'Negative cache' : 'Data cached'}`,
+              `✓ Cache HIT (verificação dupla) - ${isNegativeCache ? 'Cache negativo' : 'Dados em cache'}`,
             )
             return parsed
           }
         }
       } catch (err) {
-        logger.warn({ err, cacheKey }, 'Redis error during double-check')
+        logger.warn({ err, cacheKey }, 'Erro no Redis durante verificação dupla')
       }
 
-      // 4. Execute Fetcher
+      // 4. Executa Fetcher
       const result = await fetcher()
 
-      // 5. Save to Cache
+      // 5. Salva no Cache
       await this.saveToCache(cacheKey, result)
 
       return result
     } finally {
-      // 6. Release Lock & Notify Waiters
+      // 6. Libera Lock & Notifica Aguardando
       await this.releaseLock(lockKey, lockToken)
     }
   }
@@ -141,7 +141,7 @@ export class ResilientCache {
     try {
       return JSON.parse(cached)
     } catch (parseError) {
-      logger.warn({ err: parseError, cacheKey }, 'Invalid JSON in cache, ignoring')
+      logger.warn({ err: parseError, cacheKey }, 'JSON inválido no cache, ignorando')
       return undefined
     }
   }
@@ -151,7 +151,7 @@ export class ResilientCache {
       const result = await this.redis.set(lockKey, token, 'PX', this.LOCK_TTL_MS, 'NX')
       return result === 'OK'
     } catch (err) {
-      logger.warn({ err, lockKey }, 'Redis error acquiring lock - proceeding degraded')
+      logger.warn({ err, lockKey }, 'Erro no Redis ao adquirir lock - prosseguindo em modo degradado')
       return true
     }
   }
@@ -170,7 +170,7 @@ export class ResilientCache {
       const channel = `${lockKey}:released`
       await this.redis.eval(script, 2, lockKey, channel, token)
     } catch (err) {
-      logger.warn({ err, lockKey }, 'Redis error releasing lock')
+      logger.warn({ err, lockKey }, 'Erro no Redis ao liberar lock')
     }
   }
 
@@ -186,7 +186,7 @@ export class ResilientCache {
     try {
       await sub.subscribe(channel)
     } catch (err) {
-      logger.warn({ err }, 'Failed to subscribe to lock channel, falling back to polling')
+      logger.warn({ err }, 'Falha ao se inscrever no canal de lock, usando polling')
     }
 
     while (Date.now() - start < this.MAX_WAIT_TIME_MS) {
@@ -201,7 +201,7 @@ export class ResilientCache {
               const waitTime = Date.now() - start
               logger.info(
                 { cacheKey, isNegativeCache, waitTimeMs: waitTime },
-                `✓ Cache HIT (after wait) - ${isNegativeCache ? 'Negative cache' : 'Data cached'}`,
+                `✓ Cache HIT (após espera) - ${isNegativeCache ? 'Cache negativo' : 'Dados em cache'}`,
               )
               return parsed
             }
@@ -211,7 +211,7 @@ export class ResilientCache {
           if (fallbackResult !== undefined) return fallbackResult
         }
       } catch (err) {
-        logger.warn({ err }, 'Redis error in wait loop')
+        logger.warn({ err }, 'Erro no Redis durante loop de espera')
         break
       }
 
@@ -227,7 +227,7 @@ export class ResilientCache {
     }
 
     await sub.unsubscribe(channel).catch(() => {})
-    logger.warn({ cacheKey }, 'Lock wait timeout - fetching in degraded mode')
+    logger.warn({ cacheKey }, 'Timeout de espera do lock - buscando em modo degradado')
     return fetcher()
   }
 
@@ -249,7 +249,7 @@ export class ResilientCache {
             const isNegativeCache = parsed === null
             logger.info(
               { cacheKey, isNegativeCache },
-              `✓ Cache HIT (fallback) - ${isNegativeCache ? 'Negative cache' : 'Data cached'}`,
+              `✓ Cache HIT (fallback) - ${isNegativeCache ? 'Cache negativo' : 'Dados em cache'}`,
             )
             return parsed
           }
@@ -273,19 +273,19 @@ export class ResilientCache {
 
       logger.debug(
         { cacheKey, isNegativeCache, ttl },
-        `Caching ${isNegativeCache ? 'negative result' : 'result'} with ${Math.round(ttl / 86400)}d TTL`,
+        `Armazenando ${isNegativeCache ? 'resultado negativo' : 'resultado'} em cache com TTL de ${Math.round(ttl / 86400)}d`,
       )
 
       await this.redis.set(cacheKey, JSON.stringify(result), 'EX', ttl)
     } catch (err) {
-      logger.error({ err, cacheKey }, 'Redis error writing cache')
+      logger.error({ err, cacheKey }, 'Erro no Redis ao gravar cache')
     }
   }
 
   private getSubscriber(): Redis {
     if (!this.subClient) {
       this.subClient = this.redis.duplicate()
-      this.subClient.on('error', (err) => logger.error({ err }, 'Redis Subscriber Error'))
+      this.subClient.on('error', (err) => logger.error({ err }, 'Erro no Subscriber do Redis'))
     }
     return this.subClient
   }
