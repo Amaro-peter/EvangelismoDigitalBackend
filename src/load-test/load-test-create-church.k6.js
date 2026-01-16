@@ -3,8 +3,8 @@ import { sleep, check, fail } from 'k6'
 
 export const options = {
     stages: [
-        { duration: '1m', target: 200 }, // ramp up to 20 users
-        { duration: '2m', target: 200 },  // stay at 20 users
+        { duration: '1m', target: 200 }, // ramp up to 200 users
+        { duration: '2m', target: 200 },  // stay at 200 users
         { duration: '1m', target: 0 }   // ramp down
     ],
     thresholds: {
@@ -62,30 +62,38 @@ export default (data) => {
 
     const createSuccess = check(createChurchRes, {
         'church created successfully': (res) => res.status === 201,
-        'response is an array': (res) => {
+        'response has church property': (res) => {
             const body = res.json()
-            return Array.isArray(body) && body.length > 0
+            return body?.church !== undefined
+        },
+        'church is an array': (res) => {
+            const body = res.json()
+            return Array.isArray(body?.church)
+        },
+        'church array has data': (res) => {
+            const body = res.json()
+            return body?.church?.length > 0
         },
         'church has publicId': (res) => {
             const body = res.json()
-            return body?.[0]?.publicId !== undefined
+            return body?.church?.[0]?.publicId !== undefined
         },
         'church name matches': (res) => {
             const body = res.json()
-            return body?.[0]?.name?.toLowerCase() === churchData.name.toLowerCase()
+            return body?.church?.[0]?.name?.toLowerCase() === churchData.name.toLowerCase()
         },
         'church has address': (res) => {
             const body = res.json()
-            return body?.[0]?.address?.toLowerCase() === churchData.address.toLowerCase()
+            return body?.church?.[0]?.address?.toLowerCase() === churchData.address.toLowerCase()
         },
         'church has coordinates': (res) => {
             const body = res.json()
-            const church = body?.[0]
+            const church = body?.church?.[0]
             return church?.lat !== undefined && church?.lon !== undefined
         },
         'church has timestamps': (res) => {
             const body = res.json()
-            const church = body?.[0]
+            const church = body?.church?.[0]
             return church?.createdAt !== undefined && church?.updatedAt !== undefined
         },
     })
