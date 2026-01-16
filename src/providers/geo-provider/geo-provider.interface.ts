@@ -24,6 +24,6 @@ export enum GeoCacheScope {
 }
 
 export interface GeocodingProvider {
-  search(query: string): Promise<GeoCoordinates | null>
-  searchStructured(options: GeoSearchOptions): Promise<GeoCoordinates | null>
+  search(query: string, signal?: AbortSignal): Promise<GeoCoordinates | null>
+  searchStructured(options: GeoSearchOptions, signal?: AbortSignal): Promise<GeoCoordinates | null>
 }

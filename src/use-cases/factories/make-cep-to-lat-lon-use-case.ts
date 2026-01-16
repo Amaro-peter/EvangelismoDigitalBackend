@@ -28,7 +28,13 @@ export function makeCepToLatLonUseCase() {
   })
 
   // Setup Resilient Geo Strategy
-  const resilientGeoProvider = new ResilientGeoProvider([locationIqProvider, nominatimProvider], redisConnection)
+  const resilientGeoProvider = new ResilientGeoProvider([locationIqProvider, nominatimProvider], redisConnection, {
+    prefix: 'cache:geocoding:',
+    defaultTtlSeconds: 60 * 60 * 24 * 7, // 7 days
+    negativeTtlSeconds: 60 * 30, // 30 minutes (Negative Cache)
+    maxPendingFetches: 500,
+    fetchTimeoutMs: 12000,
+  })
 
   // Setup Address Providers
   const awesomeApiProvider = new AwesomeApiProvider({
@@ -40,10 +46,22 @@ export function makeCepToLatLonUseCase() {
     apiUrl: env.VIACEP_API_URL,
   })
 
-  const resilientAddressProvider = new ResilientAddressProvider([awesomeApiProvider, viaCepProvider], redisConnection)
+  const resilientAddressProvider = new ResilientAddressProvider([awesomeApiProvider, viaCepProvider], redisConnection, {
+    prefix: 'cache:cep:',
+    defaultTtlSeconds: 60 * 60 * 24 * 7, // 7 days
+    negativeTtlSeconds: 60 * 30, // 30 minutes
+    maxPendingFetches: 500,
+    fetchTimeoutMs: 8000,
+  })
 
   // Create Use Case
-  cachedUseCase = new CepToLatLonUseCase(resilientGeoProvider, resilientAddressProvider, redisConnection)
+  cachedUseCase = new CepToLatLonUseCase(resilientGeoProvider, resilientAddressProvider, redisConnection, {
+    prefix: 'cache:cep-coords:',
+    defaultTtlSeconds: 60 * 60 * 24 * 7, // 7 days
+    negativeTtlSeconds: 60 * 30, // 30 minutes (Negative Cache)
+    maxPendingFetches: 500,
+    fetchTimeoutMs: 25000,
+  })
 
   // 3. Return the new singleton
   return cachedUseCase

@@ -1,3 +1,5 @@
+import { time } from 'console'
+
 export const messages = {
   validation: {
     invalidData: 'Dados de registro inválidos!',
@@ -29,6 +31,12 @@ export const messages = {
     createChurchFailed: 'Falha ao criar a igreja.',
     createUserFailed: 'Falha ao criar o usuário.',
     geoProviderFailureError: 'Falha ao se comunicar com o provedor de geolocalização.',
+    serviceOverloadError: 'Serviço sobrecarregado - tente novamente mais tarde',
+    timeoutExceedOnFetch: 'Tempo limite excedido ao buscar dados externo.',
+    noGeoProviderError:
+      'Provedor resiliente de geolocalização requer pelo menos um provedor de geolocalização configurado.',
+    noAddressProviderError: 'Provedor resiliente de endereço requer pelo menos um provedor de endereço configurado.',
+    unexpectedFetchAddressFailError: 'Falha inesperada ao buscar o endereço.',
   },
   info: {
     passwordResetGeneric: 'Se o usuário existir, você receberá um e-mail com instruções para redefinir a senha.',

@@ -58,6 +58,13 @@ export default defineConfig(({ mode }) => {
         {
           extends: true,
           test: {
+            name: 'unit-resilient-cache',
+            dir: 'src/lib/redis/helper',
+          },
+        },
+        {
+          extends: true,
+          test: {
             name: 'e2e',
             dir: 'src/http/controllers',
             exclude: ['**/geo-real-fallback.spec.ts'],

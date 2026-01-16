@@ -2,7 +2,8 @@ import { Redis } from 'ioredis'
 import { AddressData, AddressProvider } from './address-provider.interface'
 import { logger } from '@lib/logger'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
-import { ResilientCache } from '@lib/redis/helper/resilient-cache'
+import { ResilientCache, ResilientCacheOptions } from '@lib/redis/helper/resilient-cache'
+import { NoAddressProviderError } from './error/no-address-provider-error'
 
 enum AddressCacheScope {
   CEP = 'cep',
@@ -14,15 +15,18 @@ export class ResilientAddressProvider implements AddressProvider {
   constructor(
     private readonly providers: AddressProvider[],
     redis: Redis,
+    optionsOverride: ResilientCacheOptions,
   ) {
     if (this.providers.length === 0) {
-      throw new Error('ResilientAddressProvider requires at least one provider')
+      throw new NoAddressProviderError()
     }
 
     this.cacheManager = new ResilientCache(redis, {
-      prefix: 'cache:cep:',
-      defaultTtlSeconds: 60 * 60 * 24 * 90, // 90 days
-      negativeTtlSeconds: 60 * 60, // 1 hour
+      prefix: optionsOverride.prefix,
+      defaultTtlSeconds: optionsOverride.defaultTtlSeconds,
+      negativeTtlSeconds: optionsOverride.negativeTtlSeconds,
+      maxPendingFetches: optionsOverride.maxPendingFetches,
+      fetchTimeoutMs: optionsOverride.fetchTimeoutMs,
     })
   }
 
@@ -34,8 +38,10 @@ export class ResilientAddressProvider implements AddressProvider {
       cep: cleanCep,
     })
 
-    const result = await this.cacheManager.getOrFetch<AddressData>(cacheKey, async () => {
-      return this.executeStrategy(cleanCep)
+    // [CRITICAL] Receive the signal from the cache manager callback
+    const result = await this.cacheManager.getOrFetch<AddressData>(cacheKey, async (signal) => {
+      // Pass the signal down to the strategy
+      return this.executeStrategy(cleanCep, signal)
     })
 
     // If result is null, it means "Invalid CEP" was cached negatively
@@ -46,15 +52,16 @@ export class ResilientAddressProvider implements AddressProvider {
     return result
   }
 
-  private async executeStrategy(cep: string): Promise<AddressData | null> {
+  private async executeStrategy(cep: string, signal: AbortSignal): Promise<AddressData | null> {
     let lastError: Error | null = null
-    let hasSystemError = false // [FIX] Track system errors
+    let hasSystemError = false
 
     for (const [index, provider] of this.providers.entries()) {
       const providerName = provider.constructor.name
 
       try {
-        const result = await provider.fetchAddress(cep)
+        // [CRITICAL] Pass the signal to the specific provider
+        const result = await provider.fetchAddress(cep, signal)
 
         if (result) {
           logger.info({ provider: providerName }, 'Endereço obtido com sucesso por um provedor de endereço')
@@ -63,7 +70,6 @@ export class ResilientAddressProvider implements AddressProvider {
       } catch (error) {
         // 1. Logic Error: Provider explicitly confirmed CEP doesn't exist
         if (error instanceof InvalidCepError) {
-          // We count this as a vote for "Not Found", but we don't stop.
           continue
         }
 
@@ -79,15 +85,11 @@ export class ResilientAddressProvider implements AddressProvider {
 
     // === DECISION PHASE ===
 
-    // [FIX] Abort cache if system errors occurred.
-    // We only return null (Negative Cache) if strictly NO system errors happened.
     if (hasSystemError) {
       logger.error({ cep, lastError }, 'Provedores de endereço falharam com erros de sistema (abortando cache)')
       throw lastError || new Error('Todos os provedores de endereço falharam')
     }
 
-    // If we reached here, all providers either returned null (unlikely for address)
-    // or threw InvalidCepError.
     logger.warn({ cep }, 'CEP confirmado como inválido pelos provedores')
     return null
   }

@@ -26,8 +26,8 @@ export class LocationIqProvider implements GeocodingProvider {
   private readonly RATE_LIMIT_LOCK_TTL_MS = 1100
   private readonly MAX_WAIT_FOR_LOCK_MS = 5000
 
-  private readonly TIMEOUT = 5000
-  private readonly MAX_ATTEMPTS = 3
+  private readonly TIMEOUT = 2000
+  private readonly MAX_ATTEMPTS = 1
   private readonly BACKOFF_MS = 200
 
   constructor(
@@ -48,29 +48,35 @@ export class LocationIqProvider implements GeocodingProvider {
     }
   }
 
-  async search(query: string): Promise<GeoCoordinates | null> {
-    return this.performRequest({ q: query, limit: 1, addressdetails: 1 })
+  async search(query: string, signal?: AbortSignal): Promise<GeoCoordinates | null> {
+    return this.performRequest({ q: query, limit: 1, addressdetails: 1 }, signal)
   }
 
-  async searchStructured(options: GeoSearchOptions): Promise<GeoCoordinates | null> {
-    return this.performRequest({
-      street: options.street,
-      city: options.city,
-      state: options.state,
-      country: options.country,
-      limit: 1,
-      addressdetails: 1,
-    })
+  async searchStructured(options: GeoSearchOptions, signal?: AbortSignal): Promise<GeoCoordinates | null> {
+    return this.performRequest(
+      {
+        street: options.street,
+        city: options.city,
+        state: options.state,
+        country: options.country,
+        limit: 1,
+        addressdetails: 1,
+      },
+      signal,
+    )
   }
 
-  private async performRequest(params: Record<string, any>): Promise<GeoCoordinates | null> {
+  private async performRequest(params: Record<string, any>, signal?: AbortSignal): Promise<GeoCoordinates | null> {
     for (let attempt = 1; attempt <= this.MAX_ATTEMPTS; attempt++) {
       try {
-        await this.waitForRateLimit()
+        await this.waitForRateLimit(signal)
 
-        const response = await LocationIqProvider.api.get<LocationIqResponseItem[]>('/search', { params })
+        // [CRITICAL] Connect signal to socket
+        const response = await LocationIqProvider.api.get<LocationIqResponseItem[]>('/search', {
+          params,
+          signal,
+        })
 
-        // Semantic "not found"
         if (!response.data || response.data.length === 0) {
           return null
         }
@@ -89,7 +95,6 @@ export class LocationIqProvider implements GeocodingProvider {
           return null
         }
 
-        // Rate limit -> immediate fallback
         if (status === 429) {
           throw new GeoServiceBusyError('LocationIQ')
         }
@@ -109,10 +114,12 @@ export class LocationIqProvider implements GeocodingProvider {
     return null
   }
 
-  private async waitForRateLimit(): Promise<void> {
+  private async waitForRateLimit(signal?: AbortSignal): Promise<void> {
     const start = Date.now()
 
     while (Date.now() - start < this.MAX_WAIT_FOR_LOCK_MS) {
+      if (signal?.aborted) throw new Error('Operation aborted')
+
       const acquired = await this.redis.set(this.RATE_LIMIT_KEY, '1', 'PX', this.RATE_LIMIT_LOCK_TTL_MS, 'NX')
 
       if (acquired === 'OK') return

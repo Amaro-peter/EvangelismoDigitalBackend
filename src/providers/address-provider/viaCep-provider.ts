@@ -3,6 +3,7 @@ import { AddressData, AddressProvider } from './address-provider.interface'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 import { logger } from '@lib/logger'
 import { createHttpClient } from '@lib/http/axios'
+import { UnexpectedFetchAddressFailError } from './error/unexpected-fetch-address-fail-error'
 
 export interface ViaCepConfig {
   apiUrl: string
@@ -11,9 +12,9 @@ export interface ViaCepConfig {
 export class ViaCepProvider implements AddressProvider {
   private static api: AxiosInstance
 
-  private readonly MAX_RETRIES = 2
-  private readonly BACKOFF_MS = 300
-  private readonly VIACEP_TIMEOUT = 3000
+  private readonly MAX_RETRIES = 1
+  private readonly BACKOFF_MS = 100
+  private readonly VIACEP_TIMEOUT = 1500
 
   // HTTPS Agent Settings
   private readonly KEEP_ALIVE_MSECS = 1000
@@ -36,12 +37,14 @@ export class ViaCepProvider implements AddressProvider {
     }
   }
 
-  async fetchAddress(cep: string): Promise<AddressData> {
+  async fetchAddress(cep: string, signal?: AbortSignal): Promise<AddressData> {
     const cleanCep = cep.replace(/\D/g, '')
 
     for (let attempt = 0; attempt <= this.MAX_RETRIES; attempt++) {
       try {
-        const response = await ViaCepProvider.api.get(`/${cleanCep}/json/`)
+        const response = await ViaCepProvider.api.get(`/${cleanCep}/json/`, {
+          signal, // [CRITICAL] Connects the socket to the timeout
+        })
 
         const hasError = response.data?.erro === true || response.data?.erro === 'true'
 
@@ -73,11 +76,12 @@ export class ViaCepProvider implements AddressProvider {
 
         const delay = this.BACKOFF_MS * Math.pow(2, attempt)
         logger.warn({ cep: cleanCep, attempt, delay, status }, 'Repetindo solicitação para ViaCEP')
+
         await this.sleep(delay)
       }
     }
 
-    throw new Error('Unexpected error in fetchAddress')
+    throw new UnexpectedFetchAddressFailError()
   }
 
   private sleep(ms: number): Promise<void> {

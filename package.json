@@ -22,6 +22,7 @@
     "test:unit:messaging": "vitest run --project unit-messaging src/use-cases/messaging",
     "test:unit:forms": "vitest run --project unit-forms src/use-cases/forms",
     "test:unit:geo-provider": "vitest run --project unit-geo-provider src/providers/geo-provider",
+    "test:unit:resilient-cache": "vitest run --project unit-resilient-cache src/lib/redis/helper",
     "test:e2e": "vitest run --project e2e",
     "test:watch": "vitest --project unit",
     "test:e2e:watch": "vitest --project e2e",

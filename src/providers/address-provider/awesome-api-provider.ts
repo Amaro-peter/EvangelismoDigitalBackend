@@ -3,6 +3,7 @@ import { AddressData, AddressProvider } from './address-provider.interface'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 import { logger } from '@lib/logger'
 import { createHttpClient } from '@lib/http/axios'
+import { UnexpectedFetchAddressFailError } from './error/unexpected-fetch-address-fail-error'
 
 export interface AwesomeApiConfig {
   apiUrl: string
@@ -12,9 +13,9 @@ export interface AwesomeApiConfig {
 export class AwesomeApiProvider implements AddressProvider {
   private static api: AxiosInstance
 
-  private readonly MAX_RETRIES = 2
+  private readonly MAX_RETRIES = 1
   private readonly BACKOFF_MS = 100
-  private readonly TIMEOUT = 3000
+  private readonly TIMEOUT = 1500
 
   // HTTPS Agent Settings
   private readonly KEEP_ALIVE_MSECS = 1000
@@ -42,12 +43,14 @@ export class AwesomeApiProvider implements AddressProvider {
     }
   }
 
-  async fetchAddress(cep: string): Promise<AddressData> {
+  async fetchAddress(cep: string, signal?: AbortSignal): Promise<AddressData> {
     const cleanCep = cep.replace(/\D/g, '')
 
     for (let attempt = 0; attempt <= this.MAX_RETRIES; attempt++) {
       try {
-        const response = await AwesomeApiProvider.api.get(`/json/${cleanCep}`)
+        const response = await AwesomeApiProvider.api.get(`/json/${cleanCep}`, {
+          signal,
+        })
 
         if (!response.data || (!response.data.city && !response.data.state)) {
           // Do not retry on domain logic errors (invalid content)
@@ -97,7 +100,7 @@ export class AwesomeApiProvider implements AddressProvider {
       }
     }
 
-    throw new Error('Unexpected error in fetchAddress')
+    throw new UnexpectedFetchAddressFailError()
   }
 
   private sleep(ms: number): Promise<void> {

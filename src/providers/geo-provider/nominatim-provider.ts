@@ -20,8 +20,7 @@ export class NominatimGeoProvider implements GeocodingProvider {
   private readonly RATE_LIMIT_LOCK_TTL_MS = 1100 // Slightly > 1s (Nominatim policy is strict 1 req/sec)
   private readonly MAX_WAIT_FOR_LOCK_MS = 5000 // Wait up to 5s for a slot
 
-  private readonly BACKOFF_MS = 300
-  private readonly NOMINATIM_TIMEOUT = 6000
+  private readonly NOMINATIM_TIMEOUT = 4000
 
   constructor(
     redisConnection: Redis,
@@ -39,33 +38,40 @@ export class NominatimGeoProvider implements GeocodingProvider {
     }
   }
 
-  async search(query: string): Promise<GeoCoordinates | null> {
-    return this.performRequest({ q: query, limit: 1, format: 'json' })
+  async search(query: string, signal?: AbortSignal): Promise<GeoCoordinates | null> {
+    return this.performRequest({ q: query, limit: 1, format: 'json' }, signal)
   }
 
-  async searchStructured(options: GeoSearchOptions): Promise<GeoCoordinates | null> {
-    return this.performRequest({
-      street: options.street,
-      city: options.city,
-      state: options.state,
-      country: options.country,
-      limit: 1,
-      format: 'json',
-    })
+  async searchStructured(options: GeoSearchOptions, signal?: AbortSignal): Promise<GeoCoordinates | null> {
+    return this.performRequest(
+      {
+        street: options.street,
+        city: options.city,
+        state: options.state,
+        country: options.country,
+        limit: 1,
+        format: 'json',
+      },
+      signal,
+    )
   }
 
-  private async performRequest(params: NominatimSearchParams): Promise<GeoCoordinates | null> {
+  private async performRequest(params: NominatimSearchParams, signal?: AbortSignal): Promise<GeoCoordinates | null> {
     try {
       // 1. Enforce Rate Limit (Respect TOS)
-      await this.waitForRateLimit()
+      await this.waitForRateLimit(signal)
 
       const cleanParams = this.cleanParams(params)
-      const response = await NominatimGeoProvider.api.get<any[]>('/search', { params: cleanParams })
+
+      // [CRITICAL] Pass signal to Axios
+      const response = await NominatimGeoProvider.api.get<any[]>('/search', {
+        params: cleanParams,
+        signal,
+      })
 
       // 2. Handle Semantic "Not Found"
-      // Nominatim returns an empty array [] when nothing is found.
       if (!response.data || response.data.length === 0) {
-        return null // Safe to cache as "Not Found"
+        return null
       }
 
       // 3. Map Success Response
@@ -83,34 +89,36 @@ export class NominatimGeoProvider implements GeocodingProvider {
         return null
       }
 
-      // Case B: Rate Limited (429) - Throw specific error to trigger fallback provider
+      // Case B: Rate Limited (429)
       if (status === 429) {
         logger.warn('Nominatim Rate Limit Hit (429)')
         throw new GeoServiceBusyError('Nominatim')
       }
 
-      // Case C: System/Network Errors (500, Timeout, DNS)
-      // DO NOT return null. Throwing ensures we do NOT cache this failure.
+      // Case C: System/Network Errors
       logger.warn({ error: err.message, status }, 'Nominatim Provider Failed')
       throw error
     }
   }
 
-  private async waitForRateLimit(): Promise<void> {
+  private async waitForRateLimit(signal?: AbortSignal): Promise<void> {
     const start = Date.now()
     // Poll for lock availability
     while (Date.now() - start < this.MAX_WAIT_FOR_LOCK_MS) {
+      // [CRITICAL] Check signal inside the wait loop
+      if (signal?.aborted) {
+        throw new Error('Operation aborted by Cache Manager')
+      }
+
       try {
         const acquired = await this.redis.set(this.RATE_LIMIT_KEY, '1', 'PX', this.RATE_LIMIT_LOCK_TTL_MS, 'NX')
         if (acquired === 'OK') return
 
-        // Wait random small interval before retrying to avoid thundering herd locally
         await this.sleep(200 + Math.random() * 50)
       } catch (err) {
-        // If Redis fails, we wait a bit and try to proceed degraded (or throw)
         logger.warn({ err }, 'Redis error during Nominatim rate limiting')
         await this.sleep(1000)
-        return // Proceeding risky, or could throw
+        return
       }
     }
     throw new GeoServiceBusyError('Nominatim (Local Rate Limit Timeout)')
@@ -119,17 +127,13 @@ export class NominatimGeoProvider implements GeocodingProvider {
   private determinePrecision(item: any): GeoPrecision {
     const type = item.addresstype || item.type || ''
 
-    // High Precision
     if (['house', 'building', 'apartments', 'residential'].includes(type)) return GeoPrecision.ROOFTOP
     if (['secondary', 'tertiary', 'primary', 'road', 'way', 'highway'].includes(type)) return GeoPrecision.ROOFTOP
 
-    // Medium Precision
     if (['neighbourhood', 'suburb', 'quarter', 'hamlet', 'village'].includes(type)) return GeoPrecision.NEIGHBORHOOD
 
-    // Low Precision
     if (['city', 'town', 'municipality', 'administrative'].includes(type)) return GeoPrecision.CITY
 
-    // Fallback based on rank if available
     if (item.place_rank) {
       if (item.place_rank >= 26) return GeoPrecision.ROOFTOP
       if (item.place_rank >= 16) return GeoPrecision.NEIGHBORHOOD
