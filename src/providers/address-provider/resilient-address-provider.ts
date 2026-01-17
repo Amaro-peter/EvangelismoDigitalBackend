@@ -4,6 +4,7 @@ import { logger } from '@lib/logger'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 import { ResilientCache, ResilientCacheOptions } from '@lib/redis/helper/resilient-cache'
 import { NoAddressProviderError } from './error/no-address-provider-error'
+import { AddressProviderFailureError } from './error/address-provider-failure-error'
 
 enum AddressCacheScope {
   CEP = 'cep',
@@ -105,7 +106,7 @@ export class ResilientAddressProvider implements AddressProvider {
       // If we had system errors and no success, we throw the error.
       // ResilientCache will NOT cache this, allowing a retry.
       logger.error({ cep, lastError }, 'Provedores de endereço falharam com erros de sistema (abortando cache)')
-      throw lastError || new Error('Todos os provedores falharam por erro de sistema')
+      throw lastError || new AddressProviderFailureError()
     }
 
     // If we simply found nothing (no errors, just empty results), we return null.

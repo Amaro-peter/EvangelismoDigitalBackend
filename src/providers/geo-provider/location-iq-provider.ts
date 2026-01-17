@@ -4,6 +4,7 @@ import { GeocodingProvider, GeoCoordinates, GeoSearchOptions, GeoPrecision } fro
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { createHttpClient } from '@lib/http/axios'
 import { logger } from '@lib/logger'
+import { OperationAbortedError } from '@lib/redis/errors/operation-aborted-error'
 
 export interface LocationIqConfig {
   apiUrl: string
@@ -122,7 +123,9 @@ export class LocationIqProvider implements GeocodingProvider {
     const start = Date.now()
 
     while (Date.now() - start < this.MAX_WAIT_FOR_LOCK_MS) {
-      if (signal?.aborted) throw new Error('Operation aborted')
+      if (signal?.aborted) {
+        throw signal.reason
+      }
 
       const acquired = await this.redis.set(this.RATE_LIMIT_KEY, '1', 'PX', this.RATE_LIMIT_LOCK_TTL_MS, 'NX')
 

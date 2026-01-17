@@ -1,5 +1,3 @@
-import { time } from 'console'
-
 export const messages = {
   validation: {
     invalidData: 'Dados de registro inválidos!',
@@ -45,6 +43,8 @@ export const messages = {
       'Provedor resiliente de geolocalização requer pelo menos um provedor de geolocalização configurado.',
     noAddressProviderError: 'Provedor resiliente de endereço requer pelo menos um provedor de endereço configurado.',
     unexpectedFetchAddressFailError: 'Falha inesperada ao buscar o endereço.',
+    operationAbortedError: 'Operação abortada pelo cache manager devido a timeout ou cancelamento.',
+    addressProviderFailureError: 'Falha ao obter o endereço a partir do provedor de endereços.',
   },
   info: {
     passwordResetGeneric: 'Se o usuário existir, você receberá um e-mail com instruções para redefinir a senha.',

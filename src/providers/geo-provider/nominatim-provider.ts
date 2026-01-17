@@ -4,6 +4,7 @@ import { GeocodingProvider, GeoCoordinates, GeoSearchOptions, GeoPrecision } fro
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { createHttpClient } from '@lib/http/axios'
 import { logger } from '@lib/logger'
+import { OperationAbortedError } from '@lib/redis/errors/operation-aborted-error'
 
 export interface NominatimConfig {
   apiUrl: string
@@ -82,7 +83,6 @@ export class NominatimGeoProvider implements GeocodingProvider {
         precision: this.determinePrecision(bestMatch),
       }
     } catch (error) {
-
       if (signal?.aborted) {
         throw signal.reason
       }
@@ -112,7 +112,7 @@ export class NominatimGeoProvider implements GeocodingProvider {
     while (Date.now() - start < this.MAX_WAIT_FOR_LOCK_MS) {
       // [CRITICAL] Check signal inside the wait loop
       if (signal?.aborted) {
-        throw new Error('Operation aborted by Cache Manager')
+        throw signal.reason
       }
 
       try {

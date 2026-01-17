@@ -4,6 +4,7 @@ import { logger } from '@lib/logger'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { ResilientCache, ResilientCacheOptions } from '@lib/redis/helper/resilient-cache'
 import { NoGeoProviderError } from './error/no-geo-provider-error'
+import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
 
 export class ResilientGeoProvider implements GeocodingProvider {
   private readonly cacheManager: ResilientCache
@@ -111,7 +112,7 @@ export class ResilientGeoProvider implements GeocodingProvider {
       // Throw error so ResilientCache DOES NOT cache the failure.
       // This allows the next request to try again.
       logger.error({ lastError }, 'Geocodificação falhou com erros de sistema (abortando cache)')
-      throw lastError || new Error('Todos os provedores de geocodificação falharam')
+      throw lastError || new GeoProviderFailureError()
     }
 
     // If no system errors occurred but we found nothing (e.g., all returned null),

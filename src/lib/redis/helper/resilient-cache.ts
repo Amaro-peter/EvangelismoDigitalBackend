@@ -3,6 +3,7 @@ import { Redis } from 'ioredis'
 import { logger } from '@lib/logger'
 import { ServiceOverloadError } from '../errors/service-overload-error'
 import { TimeoutExceedOnFetchError } from '../errors/timeout-exceed-on-fetch-error'
+import { OperationAbortedError } from '../errors/operation-aborted-error'
 
 export interface ResilientCacheOptions {
   prefix: string
@@ -150,7 +151,7 @@ export class ResilientCache {
       return new Error(reason)
     }
 
-    return new Error('Operation aborted')
+    return new OperationAbortedError()
   }
 
   /* ------------------------------------------------------------------------ */
