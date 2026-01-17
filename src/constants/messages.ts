@@ -30,7 +30,15 @@ export const messages = {
     formSubmissionFailed: 'Falha ao enviar o formulário.',
     createChurchFailed: 'Falha ao criar a igreja.',
     createUserFailed: 'Falha ao criar o usuário.',
-    geoProviderFailureError: 'Falha ao se comunicar com o provedor de geolocalização.',
+    geoProviderFailureError: `
+      Prezado usuário,
+      Não conseguimos encontrar igrejas próximas agora.
+
+      Estamos com uma instabilidade temporária ao localizar sua região a partir do CEP informado.
+
+      Você pode tentar novamente em alguns instantes ou conferir se o CEP está correto. 
+      Estamos trabalhando para normalizar o serviço o quanto antes.
+    `.trim(),
     serviceOverloadError: 'Serviço sobrecarregado - tente novamente mais tarde',
     timeoutExceedOnFetch: 'Tempo limite excedido ao buscar dados externo.',
     noGeoProviderError:

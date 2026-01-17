@@ -43,10 +43,14 @@ export class AwesomeApiProvider implements AddressProvider {
     }
   }
 
-  async fetchAddress(cep: string, signal?: AbortSignal): Promise<AddressData> {
+  async fetchAddress(cep: string, signal?: AbortSignal): Promise<AddressData | null> {
     const cleanCep = cep.replace(/\D/g, '')
 
     for (let attempt = 0; attempt <= this.MAX_RETRIES; attempt++) {
+      if (signal?.aborted) {
+        throw signal.reason
+      }
+
       try {
         const response = await AwesomeApiProvider.api.get(`/json/${cleanCep}`, {
           signal,
@@ -71,6 +75,10 @@ export class AwesomeApiProvider implements AddressProvider {
           lon: lng ? parseFloat(lng) : undefined,
         }
       } catch (error) {
+        if (signal?.aborted) {
+          throw signal.reason
+        }
+
         // 1. Domain Error: Pass through immediately
         if (error instanceof InvalidCepError) throw error
 

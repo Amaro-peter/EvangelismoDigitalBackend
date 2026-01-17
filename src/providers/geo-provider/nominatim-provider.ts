@@ -82,6 +82,11 @@ export class NominatimGeoProvider implements GeocodingProvider {
         precision: this.determinePrecision(bestMatch),
       }
     } catch (error) {
+
+      if (signal?.aborted) {
+        throw signal.reason
+      }
+
       const err = error as AxiosError
       const status = err.response?.status
 

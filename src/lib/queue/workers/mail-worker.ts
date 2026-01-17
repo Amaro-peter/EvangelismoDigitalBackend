@@ -1,7 +1,7 @@
 import { Worker } from 'bullmq'
 import { MAIL_QUEUE_NAME } from '../mail-queue'
 import { makeSendEmailUseCase } from '@use-cases/factories/make-send-email-use-case'
-import { redisConnection } from '@lib/redis/connection'
+import { createRedisBullMQConnection, attachRedisLogger } from '@lib/redis/redis-bullMQ-connection'
 import { logger } from '@lib/logger'
 
 const CONCURRENCY_LIMIT = 10 // Ajuste conforme limite do seu SMTP
@@ -10,6 +10,9 @@ const DURATION = 1000 // 100 e-mails por segundo
 
 export async function startMailWorker() {
   logger.info('🚀 Iniciando worker de e-mails')
+
+  const redisForWorker = createRedisBullMQConnection()
+  attachRedisLogger(redisForWorker)
 
   const worker = new Worker(
     MAIL_QUEUE_NAME,
@@ -30,7 +33,7 @@ export async function startMailWorker() {
       logger.info({ jobId: job.id, to }, 'E-mail enviado com sucesso via fila')
     },
     {
-      connection: redisConnection,
+      connection: redisForWorker,
       concurrency: CONCURRENCY_LIMIT,
       limiter: {
         max: RATE_LIMIT,

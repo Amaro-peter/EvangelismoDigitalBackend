@@ -23,16 +23,22 @@ export class ResilientGeoProvider implements GeocodingProvider {
       negativeTtlSeconds: optionsOverride.negativeTtlSeconds,
       maxPendingFetches: optionsOverride.maxPendingFetches,
       fetchTimeoutMs: optionsOverride.fetchTimeoutMs,
+      ttlJitterPercentage: optionsOverride.ttlJitterPercentage,
     })
   }
 
   async search(query: string, signal?: AbortSignal): Promise<GeoCoordinates | null> {
     const cacheKey = this.cacheManager.generateKey({ _method: GeoCacheScope.SEARCH, q: query })
 
-    // [CRITICAL] 1. Pass the signal from 'getOrFetch' down to 'executeStrategy'
-    return this.cacheManager.getOrFetch(cacheKey, (signal) => {
-      return this.executeStrategy((provider, sig) => provider.search(query, sig), signal)
-    })
+    // [CRITICAL] 1. Use getOrFetch with proper typing allowing 'null'
+    return this.cacheManager.getOrFetch<GeoCoordinates | null>(
+      cacheKey,
+      async (effectiveSignal) => {
+        // [CRITICAL] 2. Execute strategy with the COORDINATED signal (Timeout + Global)
+        return this.executeStrategy((provider, innerSignal) => provider.search(query, innerSignal), effectiveSignal)
+      },
+      signal, // 3. Pass parent signal (25s Global Timeout)
+    )
   }
 
   async searchStructured(options: GeoSearchOptions, signal?: AbortSignal): Promise<GeoCoordinates | null> {
@@ -41,21 +47,32 @@ export class ResilientGeoProvider implements GeocodingProvider {
       ...options,
     })
 
-    // [CRITICAL] 1. Pass the signal from 'getOrFetch' down to 'executeStrategy'
-    return this.cacheManager.getOrFetch(cacheKey, (signal) => {
-      return this.executeStrategy((provider, sig) => provider.searchStructured(options, sig), signal)
-    })
+    return this.cacheManager.getOrFetch<GeoCoordinates | null>(
+      cacheKey,
+      async (effectiveSignal) => {
+        return this.executeStrategy(
+          (provider, innerSignal) => provider.searchStructured(options, innerSignal),
+          effectiveSignal,
+        )
+      },
+      signal,
+    )
   }
 
   private async executeStrategy(
     action: (provider: GeocodingProvider, signal: AbortSignal) => Promise<GeoCoordinates | null>,
-    signal: AbortSignal, // [CRITICAL] 2. Receive signal here
+    signal: AbortSignal,
   ): Promise<GeoCoordinates | null> {
     let lastError: unknown = null
     let hasSystemError = false
 
     for (const [index, provider] of this.providers.entries()) {
       const providerName = provider.constructor.name
+
+      // Defensive Check: Stop immediately if timeout/abort fired
+      if (signal.aborted) {
+        throw signal.reason
+      }
 
       try {
         // [CRITICAL] 3. Pass signal to the action (which calls the provider)
@@ -68,6 +85,11 @@ export class ResilientGeoProvider implements GeocodingProvider {
 
         logger.warn({ provider: providerName }, 'Provedor retornou sem resultados (Não Encontrado)')
       } catch (error) {
+        // Check for Abort immediately in catch
+        if (signal.aborted) {
+          throw signal.reason
+        }
+
         // SYSTEM FAIL: Record that a system error occurred
         hasSystemError = true
         lastError = error
@@ -86,11 +108,14 @@ export class ResilientGeoProvider implements GeocodingProvider {
 
     // === DECISION PHASE ===
     if (hasSystemError) {
+      // Throw error so ResilientCache DOES NOT cache the failure.
+      // This allows the next request to try again.
       logger.error({ lastError }, 'Geocodificação falhou com erros de sistema (abortando cache)')
       throw lastError || new Error('Todos os provedores de geocodificação falharam')
     }
 
-    logger.warn('Geocodificação falhou para todos os provedores')
+    // If no system errors occurred but we found nothing (e.g., all returned null),
+    // return null so ResilientCache stores it (Negative Caching).
     return null
   }
 }

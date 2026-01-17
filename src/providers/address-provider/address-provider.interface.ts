@@ -8,5 +8,5 @@ export interface AddressData {
 }
 
 export interface AddressProvider {
-  fetchAddress(cep: string, signal?: AbortSignal): Promise<AddressData>
+  fetchAddress(cep: string, signal?: AbortSignal): Promise<AddressData | null>
 }

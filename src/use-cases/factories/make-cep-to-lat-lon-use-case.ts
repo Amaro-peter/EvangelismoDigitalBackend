@@ -5,13 +5,15 @@ import { ResilientAddressProvider } from 'providers/address-provider/resilient-a
 import { NominatimGeoProvider } from 'providers/geo-provider/nominatim-provider'
 import { LocationIqProvider } from 'providers/geo-provider/location-iq-provider'
 import { ResilientGeoProvider } from 'providers/geo-provider/resilient-geo-provider'
-import { redisConnection } from '@lib/redis/connection'
 import { env } from '@env/index'
+import { createRedisCacheConnection } from '@lib/redis/redis-cache-connection'
+
+const redis = createRedisCacheConnection()
 
 // 1. Variable to hold the singleton instance
 let cachedUseCase: CepToLatLonUseCase | null = null
 
-export function makeCepToLatLonUseCase() {
+export function makeCepToLatLonUseCase(redisConnection = redis) {
   // 2. Return the existing instance if it has already been created
   if (cachedUseCase) {
     return cachedUseCase

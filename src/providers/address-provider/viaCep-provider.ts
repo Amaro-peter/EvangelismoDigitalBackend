@@ -37,13 +37,22 @@ export class ViaCepProvider implements AddressProvider {
     }
   }
 
-  async fetchAddress(cep: string, signal?: AbortSignal): Promise<AddressData> {
+  // UPDATE: Accepts signal
+  async fetchAddress(cep: string, signal?: AbortSignal): Promise<AddressData | null> {
     const cleanCep = cep.replace(/\D/g, '')
 
-    for (let attempt = 0; attempt <= this.MAX_RETRIES; attempt++) {
+    for (let attempt = 1; attempt <= this.MAX_RETRIES + 1; attempt++) {
+      // 1. Defensive Check: Stop if already aborted before request
+      if (signal?.aborted) {
+        throw signal.reason
+      }
+
       try {
+        // 2. Pass signal to Axios
         const response = await ViaCepProvider.api.get(`/${cleanCep}/json/`, {
-          signal, // [CRITICAL] Connects the socket to the timeout
+          signal,
+          // Note: Axios timeout is handled by the instance config,
+          // but signal priority takes over if it fires first.
         })
 
         const hasError = response.data?.erro === true || response.data?.erro === 'true'
@@ -60,13 +69,20 @@ export class ViaCepProvider implements AddressProvider {
 
         return addressData
       } catch (error) {
+        // 3. Check for Abort immediately in catch
+        if (signal?.aborted) {
+          throw signal.reason
+        }
+
         if (error instanceof InvalidCepError) throw error
 
         const err = error as AxiosError
         const status = err.response?.status
+
+        // 4. Retry Logic
         const isRetryable = !err.response || (typeof status === 'number' && (status >= 500 || status === 429))
 
-        if (!isRetryable || attempt === this.MAX_RETRIES) {
+        if (!isRetryable || attempt > this.MAX_RETRIES) {
           logger.error(
             { cep: cleanCep, attempt, status, error: err.message },
             'Falha ao buscar endereço após tentativas',
@@ -84,7 +100,7 @@ export class ViaCepProvider implements AddressProvider {
     throw new UnexpectedFetchAddressFailError()
   }
 
-  private sleep(ms: number): Promise<void> {
+  private sleep(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms))
   }
 }

@@ -13,7 +13,7 @@ export async function churchesRoutes(app: FastifyInstance) {
     {
       config: {
         rateLimit: {
-          max: 20,
+          max: 30000,
           timeWindow: '1 minute',
         },
       },

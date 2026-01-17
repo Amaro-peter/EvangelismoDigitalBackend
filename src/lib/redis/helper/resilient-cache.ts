@@ -10,12 +10,13 @@ export interface ResilientCacheOptions {
   negativeTtlSeconds: number
   maxPendingFetches?: number
   fetchTimeoutMs?: number
-  // Opção para controlar a % de variação (padrão 5%)
   ttlJitterPercentage?: number
 }
 
 export class ResilientCache {
+  // Intra-pod deduplication map
   private readonly pendingFetches = new Map<string, Promise<any>>()
+
   private readonly MAX_PENDING: number
   private readonly FETCH_TIMEOUT: number
   private readonly JITTER_PERCENTAGE: number
@@ -25,12 +26,12 @@ export class ResilientCache {
     private readonly options: ResilientCacheOptions,
   ) {
     this.MAX_PENDING = options.maxPendingFetches ?? 1_000
-    this.FETCH_TIMEOUT = options.fetchTimeoutMs ?? 30_000
-    this.JITTER_PERCENTAGE = options.ttlJitterPercentage ?? 0.05 // 5% de variação
+    this.FETCH_TIMEOUT = options.fetchTimeoutMs ?? 12_000
+    this.JITTER_PERCENTAGE = options.ttlJitterPercentage ?? 0.05
   }
 
   /* ------------------------------------------------------------------------ */
-  /* Geração de Chave                                                         */
+  /* Key Generation (SHA-256 Hash)                                             */
   /* ------------------------------------------------------------------------ */
 
   generateKey(params: Record<string, any>): string {
@@ -46,138 +47,128 @@ export class ResilientCache {
   }
 
   /* ------------------------------------------------------------------------ */
-  /* API Pública (Dedup com Promises)                                         */
+  /* Core: Get Or Fetch with Dedup + Abort Coordination                        */
   /* ------------------------------------------------------------------------ */
 
-  async getOrFetch<T>(cacheKey: string, fetcher: (signal: AbortSignal) => Promise<T | null>): Promise<T | null> {
-    // 1. Request Coalescing (Memória local do Pod)
-    const existing = this.pendingFetches.get(cacheKey)
+  async getOrFetch<T>(
+    key: string,
+    fetcher: (signal: AbortSignal) => Promise<T>,
+    parentSignal?: AbortSignal,
+  ): Promise<T | null> {
+    // 1. Intra-pod Deduplication (FAST PATH)
+    const existing = this.pendingFetches.get(key)
     if (existing) {
-      logger.debug({ cacheKey }, 'Requisição coalescida - reutilizando fetch pendente')
-      return existing
+      return existing as Promise<T>
     }
 
-    // 2. Load shedding
+    // 2. Fast Redis Read
+    try {
+      const cached = await this.redis.get(key)
+      if (cached) {
+        return JSON.parse(cached) as T
+      }
+    } catch (err) {
+      logger.warn({ err, key }, 'Redis read failed (ResilientCache). Proceeding to fetch.')
+    }
+
+    // 3. Circuit Breaker / Overload Protection
     if (this.pendingFetches.size >= this.MAX_PENDING) {
-      logger.warn({ cacheKey }, 'Pressão de memória: descartando requisição')
+      logger.error({ key }, 'ResilientCache overloaded (MAX_PENDING reached)')
       throw new ServiceOverloadError()
     }
 
-    // 3. Executa e garante limpeza do mapa ao final
-    const promise = this.executeWithCleanup(cacheKey, fetcher)
-    this.pendingFetches.set(cacheKey, promise)
+    // 4. Execute fetch with coordinated abort signals
+    const promise = this.executeFetchWithSignalLogic(key, fetcher, parentSignal)
 
-    return promise
-  }
-
-  /* ------------------------------------------------------------------------ */
-  /* Lógica Principal                                                         */
-  /* ------------------------------------------------------------------------ */
-
-  private async executeWithCleanup<T>(
-    cacheKey: string,
-    fetcher: (signal: AbortSignal) => Promise<T | null>,
-  ): Promise<T | null> {
-    const controller = new AbortController()
+    this.pendingFetches.set(key, promise)
 
     try {
-      return await this.withTimeout(
-        this.execute(cacheKey, () => fetcher(controller.signal), controller.signal),
-        this.FETCH_TIMEOUT,
-        cacheKey,
-        controller,
-      )
+      return await promise
     } finally {
-      this.pendingFetches.delete(cacheKey)
+      this.pendingFetches.delete(key)
     }
   }
 
-  private async execute<T>(cacheKey: string, fetcher: () => Promise<T | null>, signal: AbortSignal): Promise<T | null> {
-    // 1. Tenta ler do Redis
-    try {
-      const cached = await this.redis.get(cacheKey)
-      if (cached !== null) {
-        logger.info({ cacheKey }, '✓ Cache HIT - Dados recuperados do Redis')
-        return JSON.parse(cached) as T
-      }
-      logger.info({ cacheKey }, '✗ Cache MISS - Buscando dados da fonte')
-    } catch (err) {
-      logger.error({ err, cacheKey }, 'Falha no Redis - Continuando sem cache')
+  /* ------------------------------------------------------------------------ */
+  /* Signal Logic with AbortSignal.any()                                       */
+  /* ------------------------------------------------------------------------ */
+
+  private async executeFetchWithSignalLogic<T>(
+    key: string,
+    fetcher: (signal: AbortSignal) => Promise<T>,
+    parentSignal?: AbortSignal,
+  ): Promise<T | null> {
+    const timeoutSignal = AbortSignal.timeout(this.FETCH_TIMEOUT)
+
+    const signals: AbortSignal[] = [timeoutSignal]
+    if (parentSignal) {
+      signals.push(parentSignal)
     }
 
-    // 2. Se não tem cache, busca na fonte
-    try {
-      const result = await fetcher()
+    const effectiveSignal = AbortSignal.any(signals)
 
-      // 3. Salva no cache com proteção contra "Zombies" e Jitter
-      if (!signal.aborted) {
-        this.saveToCache(cacheKey, result).catch((err) => logger.error({ err, cacheKey }, 'Falha ao escrever no cache'))
-      } else {
-        logger.warn({ cacheKey }, 'Fetch abortado - Pulando escrita no cache')
+    // Defensive: never start if already aborted
+    if (effectiveSignal.aborted) {
+      throw this.normalizeAbortReason(effectiveSignal.reason)
+    }
+
+    try {
+      const result = await fetcher(effectiveSignal)
+
+      // Enforce contract: fetchers must honor AbortSignal
+      if (effectiveSignal.aborted) {
+        throw this.normalizeAbortReason(effectiveSignal.reason)
       }
 
+      await this.setResult(key, result)
       return result
-    } catch (err) {
-      // Se o fetcher falhou por abort, ainda precisamos logar o warning
-      if (signal.aborted) {
-        logger.warn({ cacheKey }, 'Fetch abortado - Pulando escrita no cache')
+    } catch (error) {
+      if (effectiveSignal.aborted) {
+        // Priority 1: Parent abort (user / global timeout)
+        if (parentSignal?.aborted) {
+          throw this.normalizeAbortReason(parentSignal.reason)
+        }
+
+        // Priority 2: Local fetch timeout
+        throw new TimeoutExceedOnFetchError()
       }
-      throw err
+
+      throw error
     }
   }
 
   /* ------------------------------------------------------------------------ */
-  /* Escrita no Cache (COM JITTER)                                            */
+  /* Abort Reason Normalization                                                */
   /* ------------------------------------------------------------------------ */
 
-  private async saveToCache<T>(cacheKey: string, result: T | null): Promise<void> {
-    try {
-      if (result === undefined) return
+  private normalizeAbortReason(reason: unknown): Error {
+    if (reason instanceof Error) {
+      return reason
+    }
 
-      const baseTtl = result === null ? this.options.negativeTtlSeconds : this.options.defaultTtlSeconds
+    if (typeof reason === 'string') {
+      return new Error(reason)
+    }
+
+    return new Error('Operation aborted')
+  }
+
+  /* ------------------------------------------------------------------------ */
+  /* Redis Write                                                              */
+  /* ------------------------------------------------------------------------ */
+
+  private async setResult(key: string, result: any): Promise<void> {
+    const baseTtl = result === null ? this.options.negativeTtlSeconds : this.options.defaultTtlSeconds
+
+    try {
       const jitterAmount = Math.floor(baseTtl * this.JITTER_PERCENTAGE)
       const randomOffset = Math.floor(Math.random() * (jitterAmount * 2 + 1)) - jitterAmount
+
       const finalTtl = Math.max(1, baseTtl + randomOffset)
 
-      await this.redis.set(cacheKey, JSON.stringify(result), 'EX', finalTtl)
-
-      logger.debug({ cacheKey, ttl: finalTtl, baseTtl }, 'Resultado armazenado em cache com Jitter')
+      await this.redis.set(key, JSON.stringify(result), 'EX', finalTtl)
     } catch (err) {
-      logger.error({ err, cacheKey }, 'Falha ao escrever no cache')
+      logger.error({ err, key }, 'Failed to write to Redis (ResilientCache)')
     }
-  }
-
-  /* ------------------------------------------------------------------------ */
-  /* Proteção contra Timeout                                                  */
-  /* ------------------------------------------------------------------------ */
-
-  private async withTimeout<T>(
-    promise: Promise<T>,
-    timeoutMs: number,
-    cacheKey: string,
-    controller?: AbortController,
-  ): Promise<T> {
-    let timeoutId: NodeJS.Timeout
-
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(() => {
-        controller?.abort()
-        reject(new TimeoutExceedOnFetchError())
-      }, timeoutMs)
-    })
-
-    try {
-      return await Promise.race([promise, timeoutPromise])
-    } finally {
-      clearTimeout(timeoutId!)
-    }
-  }
-
-  // Helpers de monitoramento
-  getPendingCount(): number {
-    return this.pendingFetches.size
-  }
-  isUnderMemoryPressure(): boolean {
-    return this.pendingFetches.size >= this.MAX_PENDING * 0.8
   }
 }

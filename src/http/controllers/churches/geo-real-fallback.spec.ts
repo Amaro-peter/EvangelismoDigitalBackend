@@ -1,4 +1,4 @@
-import { redisConnection } from '@lib/redis/connection'
+import { redisConnection } from '@lib/redis/redis-bullMQ-connection'
 import { app } from 'app'
 import { AwesomeApiProvider } from 'providers/address-provider/awesome-api-provider'
 import { ViaCepProvider } from 'providers/address-provider/viaCep-provider'

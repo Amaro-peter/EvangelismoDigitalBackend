@@ -68,6 +68,8 @@ export class LocationIqProvider implements GeocodingProvider {
 
   private async performRequest(params: Record<string, any>, signal?: AbortSignal): Promise<GeoCoordinates | null> {
     for (let attempt = 1; attempt <= this.MAX_ATTEMPTS; attempt++) {
+      if (signal?.aborted) throw signal.reason
+
       try {
         await this.waitForRateLimit(signal)
 
@@ -88,6 +90,8 @@ export class LocationIqProvider implements GeocodingProvider {
           precision: this.determinePrecision(bestMatch),
         }
       } catch (error) {
+        if (signal?.aborted) throw signal.reason
+
         const err = error as AxiosError
         const status = err.response?.status
 

@@ -1,0 +1,24 @@
+import { env } from '@env/index'
+import { logger } from '@lib/logger'
+import Redis from 'ioredis'
+
+export function createRedisCacheConnection() {
+  const redis = new Redis({
+    host: env.REDIS_HOST,
+    port: env.REDIS_PORT,
+    password: env.REDIS_PASSWORD || undefined,
+    commandTimeout: 1000,
+    enableOfflineQueue: false,
+    maxRetriesPerRequest: 1,
+    retryStrategy: (times) => {
+      if (times > 2) return null
+      return Math.min(times * 50, 500)
+    },
+  })
+
+  redis.on('error', (error) => {
+    logger.error({ error }, '❌ Redis cache connection error')
+  })
+
+  return redis
+}
