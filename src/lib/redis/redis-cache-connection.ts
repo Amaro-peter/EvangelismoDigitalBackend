@@ -8,7 +8,7 @@ export function createRedisCacheConnection() {
     port: env.REDIS_PORT,
     password: env.REDIS_PASSWORD || undefined,
     commandTimeout: 1000,
-    enableOfflineQueue: false,
+    enableOfflineQueue: true,
     maxRetriesPerRequest: 1,
     retryStrategy: (times) => {
       if (times > 2) return null

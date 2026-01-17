@@ -1,4 +1,3 @@
-import { redisConnection } from '@lib/redis/redis-bullMQ-connection'
 import { app } from 'app'
 import { AwesomeApiProvider } from 'providers/address-provider/awesome-api-provider'
 import { ViaCepProvider } from 'providers/address-provider/viaCep-provider'
@@ -6,9 +5,12 @@ import { LocationIqProvider } from 'providers/geo-provider/location-iq-provider'
 import { NominatimGeoProvider } from 'providers/geo-provider/nominatim-provider'
 import request from 'supertest'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createRedisCacheConnection } from '@lib/redis/redis-cache-connection' // <-- Added import
 
 // NOTE: This test suite hits REAL APIs for the "OK" scenarios.
 // It mocks ONLY the failures to force the fallback logic to execute.
+
+const redisConnection = createRedisCacheConnection() // <-- Added initialization
 
 describe('Real Geocoding Fallback Scenarios (e2e)', () => {
   beforeAll(async () => {
@@ -30,7 +32,7 @@ describe('Real Geocoding Fallback Scenarios (e2e)', () => {
   })
 
   // Known Valid CEP (Av. Paulista, SP)
-  const VALID_CEP = '01310100'
+  const VALID_CEP = '24240540'
   // Invalid CEP
   const INVALID_CEP = '00000000'
 
@@ -62,7 +64,9 @@ describe('Real Geocoding Fallback Scenarios (e2e)', () => {
     // For this scenario, we use a naturally INVALID CEP.
     // Real APIs will return 400/404 or "erro: true".
 
-    const spyAwesome = vi.spyOn(AwesomeApiProvider.prototype, 'fetchAddress')
+    const spyAwesome = vi
+      .spyOn(AwesomeApiProvider.prototype, 'fetchAddress')
+      .mockRejectedValue(new Error('Simulated AwesomeAPI Downtime'))
     const spyViaCep = vi.spyOn(ViaCepProvider.prototype, 'fetchAddress')
 
     const response = await request(app.server).get('/churches/nearest').query({ cep: INVALID_CEP })
