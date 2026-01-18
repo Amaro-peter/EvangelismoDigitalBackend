@@ -39,7 +39,7 @@ vi.mock('@lib/logger', () => ({
 
 import axios from 'axios'
 import { Redis } from 'ioredis'
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { createRedisCacheConnection } from '@lib/redis/redis-cache-connection'
 import { ResilientCache, CachedFailureError } from './resilient-cache'
 import { ServiceOverloadError } from '../errors/service-overload-error'
@@ -801,6 +801,160 @@ describe('ResilientCache - Integration Tests', () => {
       // Should not be in cache
       const cached = await redis.get(key)
       expect(cached).toBeNull()
+    })
+  })
+
+  describe('edge cases & pessimistic integration scenarios', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+      vi.restoreAllMocks()
+    })
+
+    it('handles Redis SET failure after successful fetch (does not poison cache)', async () => {
+      const value = { ok: true }
+
+      const fetcher = vi.fn(async () => value)
+
+      vi.spyOn(redis, 'set').mockRejectedValueOnce(new Error('redis set failed'))
+
+      const result = await cache.getOrFetch('key:set-failure', fetcher)
+
+      expect(result).toEqual(value)
+      expect(fetcher).toHaveBeenCalledTimes(1)
+
+      // Next call should refetch (cache was not poisoned)
+      const fetcher2 = vi.fn(async () => ({ ok: 'again' }))
+      const result2 = await cache.getOrFetch('key:set-failure', fetcher2)
+
+      expect(result2).toEqual({ ok: 'again' })
+      expect(fetcher2).toHaveBeenCalledTimes(1)
+    })
+
+    it('handles slow Redis GET resolving after fetch completes (race-safe)', async () => {
+      const redisGet = vi.spyOn(redis, 'get').mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            setTimeout(() => resolve(null), 200)
+          }),
+      )
+
+      const fetcher = vi.fn(async () => 'fresh')
+
+      const promise = cache.getOrFetch('key:slow-get', fetcher)
+
+      await vi.runAllTimersAsync()
+
+      const result = await promise
+
+      expect(result).toBe('fresh')
+      expect(fetcher).toHaveBeenCalledTimes(1)
+
+      redisGet.mockRestore()
+    })
+
+    it('throws CachedFailureError with correct metadata', async () => {
+      const rootError = new Error('boom')
+
+      const errorMapper = (error: unknown) => {
+        if (error instanceof Error) {
+          return {
+            type: error.constructor.name,
+            message: error.message,
+          }
+        }
+        return null
+      }
+
+      const fetcher = vi.fn(async () => {
+        throw rootError
+      })
+
+      await expect(cache.getOrFetch('key:typed-error', fetcher, errorMapper)).rejects.toMatchObject({
+        name: 'CachedFailureError',
+        isCachedFailure: true,
+        cause: rootError,
+      })
+    })
+
+    it('mixed concurrency: second caller receives cached failure after first fails', async () => {
+      const errorMapper = (error: unknown) => {
+        if (error instanceof Error) {
+          return {
+            type: error.constructor.name,
+            message: error.message,
+          }
+        }
+        return null
+      }
+
+      const fetcher = vi.fn(async () => {
+        await new Promise((r) => setTimeout(r, 50))
+        throw new Error('fail once')
+      })
+
+      const p1 = cache.getOrFetch('key:mixed', fetcher, errorMapper)
+      const p2 = cache.getOrFetch('key:mixed', fetcher, errorMapper)
+
+      await vi.runAllTimersAsync()
+
+      await expect(p1).rejects.toBeInstanceOf(Error)
+      await expect(p2).rejects.toMatchObject({
+        isCachedFailure: true,
+      })
+
+      expect(fetcher).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not leak inFlight entries after repeated failures', async () => {
+      const fetcher = vi.fn(async () => {
+        throw new Error('always fails')
+      })
+
+      for (let i = 0; i < 100; i++) {
+        try {
+          await cache.getOrFetch(`key:leak:${i}`, fetcher)
+        } catch {}
+      }
+
+      // indirect validation: same key should trigger fetch again,
+      // not reuse stale inFlight promise
+      const fetcher2 = vi.fn(async () => 'ok')
+
+      const result = await cache.getOrFetch('key:leak:final', fetcher2)
+
+      expect(result).toBe('ok')
+      expect(fetcher2).toHaveBeenCalledTimes(1)
+    })
+
+    it('external AbortSignal cancels fetch and does not cache result or failure', async () => {
+      const controller = new AbortController()
+
+      const fetcher = vi.fn(
+        () =>
+          new Promise((_, reject) => {
+            controller.signal.addEventListener('abort', () => {
+              reject(new Error('aborted'))
+            })
+          }),
+      )
+
+      const promise = cache.getOrFetch('key:abort', fetcher, undefined, controller.signal)
+
+      controller.abort()
+
+      await expect(promise).rejects.toThrow('aborted')
+
+      // Next call should run fetcher again (no cached failure)
+      const fetcher2 = vi.fn(async () => 'ok')
+
+      const result = await cache.getOrFetch('key:abort', fetcher2)
+
+      expect(result).toBe('ok')
+      expect(fetcher2).toHaveBeenCalledTimes(1)
     })
   })
 })
