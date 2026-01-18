@@ -39,12 +39,12 @@ export function makeCepToLatLonUseCase(redisConnection = redis) {
   })
 
   // Setup Address Providers
-  const awesomeApiProvider = new AwesomeApiProvider({
+  const awesomeApiProvider = new AwesomeApiProvider(redisConnection, {
     apiUrl: env.AWESOME_API_URL,
     apiToken: env.AWESOME_API_TOKEN,
   })
 
-  const viaCepProvider = new ViaCepProvider({
+  const viaCepProvider = new ViaCepProvider(redisConnection, {
     apiUrl: env.VIACEP_API_URL,
   })
 

@@ -4,7 +4,8 @@ import { GeocodingProvider, GeoCoordinates, GeoSearchOptions, GeoPrecision } fro
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { createHttpClient } from '@lib/http/axios'
 import { logger } from '@lib/logger'
-import { OperationAbortedError } from '@lib/redis/errors/operation-aborted-error'
+import { RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
+import { LocationIqProviderError } from './error/location-iq-error'
 
 export interface LocationIqConfig {
   apiUrl: string
@@ -21,21 +22,28 @@ type LocationIqResponseItem = {
 
 export class LocationIqProvider implements GeocodingProvider {
   private static api: AxiosInstance
-  private readonly redis: Redis
+  private readonly rateLimiter: RedisRateLimiter
 
-  private readonly RATE_LIMIT_KEY = 'ratelimit:locationiq'
-  private readonly RATE_LIMIT_LOCK_TTL_MS = 1100
-  private readonly MAX_WAIT_FOR_LOCK_MS = 5000
+  // Configuração Fail-Fast: 2 requisições por segundo
+  private readonly RATE_LIMIT_MAX = 2
+  private readonly RATE_LIMIT_WINDOW = 1
 
+  // Timeout da API LocationIQ
   private readonly TIMEOUT = 2000
-  private readonly MAX_ATTEMPTS = 1
+  private readonly MAX_ATTEMPTS = 2
   private readonly BACKOFF_MS = 200
+
+  // HTTPS Agent Settings
+  private readonly KEEP_ALIVE_MSECS = 1000
+  private readonly MAX_SOCKETS = 100
+  private readonly MAX_FREE_SOCKETS = 10
+  private readonly HTTPS_AGENT_TIMEOUT = 60000
 
   constructor(
     redisConnection: Redis,
     private readonly config: LocationIqConfig,
   ) {
-    this.redis = redisConnection
+    this.rateLimiter = new RedisRateLimiter(redisConnection)
 
     if (!LocationIqProvider.api) {
       LocationIqProvider.api = createHttpClient({
@@ -44,6 +52,12 @@ export class LocationIqProvider implements GeocodingProvider {
         params: {
           key: this.config.apiToken,
           format: 'json',
+        },
+        agentOptions: {
+          keepAliveMsecs: this.KEEP_ALIVE_MSECS,
+          maxSockets: this.MAX_SOCKETS,
+          maxFreeSockets: this.MAX_FREE_SOCKETS,
+          timeout: this.HTTPS_AGENT_TIMEOUT,
         },
       })
     }
@@ -68,19 +82,35 @@ export class LocationIqProvider implements GeocodingProvider {
   }
 
   private async performRequest(params: Record<string, any>, signal?: AbortSignal): Promise<GeoCoordinates | null> {
+    let lastError: Error | unknown = undefined
+
     for (let attempt = 1; attempt <= this.MAX_ATTEMPTS; attempt++) {
-      if (signal?.aborted) throw signal.reason
+      if (signal?.aborted) {
+        throw signal.reason
+      }
+
+      // Fail-Fast Rate Limit Check
+      // Verifica se temos cota para ESTA tentativa
+      const allowed = await this.rateLimiter.tryConsume(
+        'locationiq-global',
+        this.RATE_LIMIT_MAX,
+        this.RATE_LIMIT_WINDOW,
+      )
+
+      if (!allowed) {
+        // [CRÍTICO] Não espera! Falha imediatamente para que o ResilientGeoProvider
+        // possa tentar o próximo provedor (ex: Nominatim ou Google) no mesmo segundo.
+        throw new GeoServiceBusyError('LocationIQ (Rate Limit Exceeded)')
+      }
 
       try {
-        await this.waitForRateLimit(signal)
-
-        // [CRITICAL] Connect signal to socket
         const response = await LocationIqProvider.api.get<LocationIqResponseItem[]>('/search', {
           params,
           signal,
         })
 
         if (!response.data || response.data.length === 0) {
+          // Not found - return null so ResilientGeoProvider can try next provider
           return null
         }
 
@@ -93,48 +123,38 @@ export class LocationIqProvider implements GeocodingProvider {
       } catch (error) {
         if (signal?.aborted) throw signal.reason
 
+        // Se o erro foi o nosso BusyError (lançado acima), repassa imediatamente
+        if (error instanceof GeoServiceBusyError) {
+          throw error
+        }
+
         const err = error as AxiosError
         const status = err.response?.status
 
-        if (status === 404 || status === 400) {
+        // Erros de cliente (404) - return null para tentar próximo provider
+        if (status === 404) {
           return null
         }
 
-        if (status === 429) {
-          throw new GeoServiceBusyError('LocationIQ')
-        }
+        // Store last error for potential re-throw
+        lastError = error
 
-        const isRetryable = !err.response || (status && status >= 500)
+        const isRetryable = !err.response || (status && status >= 500) || status === 429
 
         if (!isRetryable || attempt === this.MAX_ATTEMPTS) {
           logger.warn({ error: err.message, status, attempt }, 'LocationIQ Provider Failed')
           throw err
         }
 
+        // Backoff apenas para erros de rede/servidor instável
         const delay = this.BACKOFF_MS * Math.pow(2, attempt - 1)
         await this.sleep(delay)
       }
     }
 
-    return null
-  }
-
-  private async waitForRateLimit(signal?: AbortSignal): Promise<void> {
-    const start = Date.now()
-
-    while (Date.now() - start < this.MAX_WAIT_FOR_LOCK_MS) {
-      if (signal?.aborted) {
-        throw signal.reason
-      }
-
-      const acquired = await this.redis.set(this.RATE_LIMIT_KEY, '1', 'PX', this.RATE_LIMIT_LOCK_TTL_MS, 'NX')
-
-      if (acquired === 'OK') return
-
-      await this.sleep(100 + Math.random() * 100)
-    }
-
-    throw new GeoServiceBusyError('LocationIQ (Local Rate Limit)')
+    // This should be unreachable, but as a safety net, throw last error or generic error
+    logger.error({ lastError }, 'LocationIQ: Unexpected code path - all attempts exhausted without throw')
+    throw lastError || new LocationIqProviderError()
   }
 
   private determinePrecision(item: LocationIqResponseItem): GeoPrecision {

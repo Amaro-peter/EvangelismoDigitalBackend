@@ -45,6 +45,8 @@ export const messages = {
     unexpectedFetchAddressFailError: 'Falha inesperada ao buscar o endereço.',
     operationAbortedError: 'Operação abortada pelo cache manager devido a timeout ou cancelamento.',
     addressProviderFailureError: 'Falha ao obter o endereço a partir do provedor de endereços.',
+    locationIqProviderError: 'Erro ao comunicar com o provedor LocationIQ.',
+    viaCepProviderError: 'Erro ao comunicar com o provedor ViaCep.',
   },
   info: {
     passwordResetGeneric: 'Se o usuário existir, você receberá um e-mail com instruções para redefinir a senha.',

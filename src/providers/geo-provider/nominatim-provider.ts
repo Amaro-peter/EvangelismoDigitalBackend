@@ -4,7 +4,7 @@ import { GeocodingProvider, GeoCoordinates, GeoSearchOptions, GeoPrecision } fro
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { createHttpClient } from '@lib/http/axios'
 import { logger } from '@lib/logger'
-import { OperationAbortedError } from '@lib/redis/errors/operation-aborted-error'
+import { RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
 
 export interface NominatimConfig {
   apiUrl: string
@@ -14,26 +14,39 @@ type NominatimSearchParams = Record<string, string | number | undefined>
 
 export class NominatimGeoProvider implements GeocodingProvider {
   private static api: AxiosInstance
-  private readonly redis: Redis
+  private readonly rateLimiter: RedisRateLimiter
 
-  // Rate Limiting ONLY (No Cache - Caching is handled by ResilientGeoProvider)
-  private readonly RATE_LIMIT_KEY = 'ratelimit:nominatim'
-  private readonly RATE_LIMIT_LOCK_TTL_MS = 1100 // Slightly > 1s (Nominatim policy is strict 1 req/sec)
-  private readonly MAX_WAIT_FOR_LOCK_MS = 5000 // Wait up to 5s for a slot
+  // Fail-Fast Configuration: 1 request per second max
+  private readonly RATE_LIMIT_MAX = 1
+  private readonly RATE_LIMIT_WINDOW = 1
 
+  // Nominatim API Timeout
   private readonly NOMINATIM_TIMEOUT = 4000
+
+  // HTTPS Agent Settings
+  private readonly KEEP_ALIVE_MSECS = 1000
+  private readonly MAX_SOCKETS = 100
+  private readonly MAX_FREE_SOCKETS = 10
+  private readonly HTTPS_AGENT_TIMEOUT = 60000
 
   constructor(
     redisConnection: Redis,
     private readonly config: NominatimConfig,
   ) {
-    this.redis = redisConnection
+    this.rateLimiter = new RedisRateLimiter(redisConnection)
+
     if (!NominatimGeoProvider.api) {
       NominatimGeoProvider.api = createHttpClient({
         baseURL: this.config.apiUrl,
         timeout: this.NOMINATIM_TIMEOUT,
         headers: {
-          'User-Agent': 'EvangelismoDigitalBackend/1.0', // Required by Nominatim TOS
+          'User-Agent': 'EvangelismoDigitalBackend/1.0 (contact@findhope.digital)',
+        },
+        agentOptions: {
+          keepAliveMsecs: this.KEEP_ALIVE_MSECS,
+          maxSockets: this.MAX_SOCKETS,
+          maxFreeSockets: this.MAX_FREE_SOCKETS,
+          timeout: this.HTTPS_AGENT_TIMEOUT,
         },
       })
     }
@@ -58,24 +71,27 @@ export class NominatimGeoProvider implements GeocodingProvider {
   }
 
   private async performRequest(params: NominatimSearchParams, signal?: AbortSignal): Promise<GeoCoordinates | null> {
-    try {
-      // 1. Enforce Rate Limit (Respect TOS)
-      await this.waitForRateLimit(signal)
+    // 1. Fail-Fast Rate Limit Check
+    // If limit is exceeded, we throw immediately so ResilientGeoProvider switches to next provider.
+    const allowed = await this.rateLimiter.tryConsume('nominatim-global', this.RATE_LIMIT_MAX, this.RATE_LIMIT_WINDOW)
 
+    if (!allowed) {
+      throw new GeoServiceBusyError('Nominatim (Rate Limit Exceeded)')
+    }
+
+    try {
       const cleanParams = this.cleanParams(params)
 
-      // [CRITICAL] Pass signal to Axios
       const response = await NominatimGeoProvider.api.get<any[]>('/search', {
         params: cleanParams,
         signal,
       })
 
-      // 2. Handle Semantic "Not Found"
       if (!response.data || response.data.length === 0) {
+        // Not found - return null so ResilientGeoProvider can try next provider
         return null
       }
 
-      // 3. Map Success Response
       const bestMatch = response.data[0]
       return {
         lat: parseFloat(bestMatch.lat),
@@ -90,43 +106,21 @@ export class NominatimGeoProvider implements GeocodingProvider {
       const err = error as AxiosError
       const status = err.response?.status
 
+      // 404 means not found - return null to try next provider
       if (status === 404) {
         return null
       }
 
-      // Case B: Rate Limited (429)
+      // API rate limit (429) - throw so ResilientGeoProvider tries next provider
       if (status === 429) {
-        logger.warn('Nominatim Rate Limit Hit (429)')
-        throw new GeoServiceBusyError('Nominatim')
+        logger.warn('Nominatim Rate Limit Hit (429 from API)')
+        throw new GeoServiceBusyError('Nominatim (API Rate Limit)')
       }
 
-      // Case C: System/Network Errors
+      // Other errors (network, 500, etc.) - throw as system errors
       logger.warn({ error: err.message, status }, 'Nominatim Provider Failed')
       throw error
     }
-  }
-
-  private async waitForRateLimit(signal?: AbortSignal): Promise<void> {
-    const start = Date.now()
-    // Poll for lock availability
-    while (Date.now() - start < this.MAX_WAIT_FOR_LOCK_MS) {
-      // [CRITICAL] Check signal inside the wait loop
-      if (signal?.aborted) {
-        throw signal.reason
-      }
-
-      try {
-        const acquired = await this.redis.set(this.RATE_LIMIT_KEY, '1', 'PX', this.RATE_LIMIT_LOCK_TTL_MS, 'NX')
-        if (acquired === 'OK') return
-
-        await this.sleep(200 + Math.random() * 50)
-      } catch (err) {
-        logger.warn({ err }, 'Redis error during Nominatim rate limiting')
-        await this.sleep(1000)
-        return
-      }
-    }
-    throw new GeoServiceBusyError('Nominatim (Local Rate Limit Timeout)')
   }
 
   private determinePrecision(item: any): GeoPrecision {
@@ -156,9 +150,5 @@ export class NominatimGeoProvider implements GeocodingProvider {
       }
     }
     return cleaned
-  }
-
-  private sleep(ms: number) {
-    return new Promise((resolve) => setTimeout(resolve, ms))
   }
 }

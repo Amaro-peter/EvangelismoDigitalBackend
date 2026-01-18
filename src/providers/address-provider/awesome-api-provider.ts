@@ -1,9 +1,10 @@
 import { AxiosError, AxiosInstance } from 'axios'
+import { Redis } from 'ioredis'
 import { AddressData, AddressProvider } from './address-provider.interface'
-import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 import { logger } from '@lib/logger'
 import { createHttpClient } from '@lib/http/axios'
-import { UnexpectedFetchAddressFailError } from './error/unexpected-fetch-address-fail-error'
+import { RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
+import { AddressServiceBusyError } from '@use-cases/errors/address-service-busy-error'
 
 export interface AwesomeApiConfig {
   apiUrl: string
@@ -12,21 +13,31 @@ export interface AwesomeApiConfig {
 
 export class AwesomeApiProvider implements AddressProvider {
   private static api: AxiosInstance
+  private readonly redis: Redis
+  private readonly rateLimiter: RedisRateLimiter
 
-  private readonly MAX_RETRIES = 1
+  // Configuração Fail-Fast: 5 requisições por segundo
+  private readonly RATE_LIMIT_MAX = 5
+  private readonly RATE_LIMIT_WINDOW = 1
+
+  private readonly MAX_RETRIES = 2
   private readonly BACKOFF_MS = 100
   private readonly TIMEOUT = 1500
 
   // HTTPS Agent Settings
   private readonly KEEP_ALIVE_MSECS = 1000
-  private readonly MAX_SOCKETS = 2
-  private readonly MAX_FREE_SOCKETS = 2
+  private readonly MAX_SOCKETS = 100
+  private readonly MAX_FREE_SOCKETS = 10
   private readonly HTTPS_AGENT_TIMEOUT = 60000
 
-  constructor(private readonly config: AwesomeApiConfig) {
+  constructor(
+    redisConnection: Redis,
+    private readonly config: AwesomeApiConfig,
+  ) {
+    this.redis = redisConnection
+    this.rateLimiter = new RedisRateLimiter(redisConnection)
+
     if (!AwesomeApiProvider.api) {
-      // Using the shared agent instead of the legacy maxSockets: 2 setting
-      // to improve concurrency as requested.
       AwesomeApiProvider.api = createHttpClient({
         baseURL: this.config.apiUrl,
         timeout: this.TIMEOUT,
@@ -46,9 +57,20 @@ export class AwesomeApiProvider implements AddressProvider {
   async fetchAddress(cep: string, signal?: AbortSignal): Promise<AddressData | null> {
     const cleanCep = cep.replace(/\D/g, '')
 
-    for (let attempt = 0; attempt <= this.MAX_RETRIES; attempt++) {
+    for (let attempt = 1; attempt <= this.MAX_RETRIES; attempt++) {
       if (signal?.aborted) {
         throw signal.reason
+      }
+
+      // Fail-Fast Rate Limit Check
+      const allowed = await this.rateLimiter.tryConsume(
+        'awesomeapi-global',
+        this.RATE_LIMIT_MAX,
+        this.RATE_LIMIT_WINDOW,
+      )
+
+      if (!allowed) {
+        throw new AddressServiceBusyError('AwesomeAPI (Rate Limit Exceeded)')
       }
 
       try {
@@ -56,10 +78,11 @@ export class AwesomeApiProvider implements AddressProvider {
           signal,
         })
 
+        // Check if response has invalid/empty data
         if (!response.data || (!response.data.city && !response.data.state)) {
-          // Do not retry on domain logic errors (invalid content)
-          logger.warn({ cep: cleanCep, attempt }, 'CEP inválido retornado pela AwesomeAPI')
-          throw new InvalidCepError()
+          logger.warn({ cep: cleanCep, attempt }, 'CEP inválido/vazio retornado pela AwesomeAPI')
+          // Return null so ResilientAddressProvider can try next provider
+          return null
         }
 
         const { address, district, city, state, lat, lng } = response.data
@@ -79,20 +102,23 @@ export class AwesomeApiProvider implements AddressProvider {
           throw signal.reason
         }
 
-        // 1. Domain Error: Pass through immediately
-        if (error instanceof InvalidCepError) throw error
+        // If rate limit error (thrown above), don't retry locally, propagate it
+        if (error instanceof AddressServiceBusyError) {
+          throw error
+        }
 
         const err = error as AxiosError
         const status = err.response?.status
 
-        // 2. Client Error (400/404): Fail fast, do not retry
-        if (status === 400 || status === 404) {
-          logger.warn({ cep: cleanCep, attempt, status }, 'CEP inválido na AwesomeAPI')
-          throw new InvalidCepError()
+        // 404 means CEP not found - return null to try next provider
+        if (status === 404) {
+          logger.warn({ cep: cleanCep, attempt, status }, 'CEP não encontrado na AwesomeAPI (404)')
+          return null
         }
 
-        // 3. Max Retries Reached?
+        // Check if error is retryable (network issues, 5xx, 429)
         const isRetryable = !err.response || (typeof status === 'number' && (status >= 500 || status === 429))
+
         if (!isRetryable || attempt === this.MAX_RETRIES) {
           logger.error(
             { cep: cleanCep, attempt, status, error: err.message },
@@ -101,14 +127,16 @@ export class AwesomeApiProvider implements AddressProvider {
           throw error
         }
 
-        // 4. Exponential Backoff
-        const delay = this.BACKOFF_MS * Math.pow(2, attempt)
+        // Backoff and retry for transient errors
+        const delay = this.BACKOFF_MS * Math.pow(2, attempt - 1)
         logger.warn({ cep: cleanCep, attempt, delay, status }, 'Repetindo solicitação para AwesomeAPI')
         await this.sleep(delay)
       }
     }
 
-    throw new UnexpectedFetchAddressFailError()
+    // This should be unreachable due to retry logic, but as safety net
+    logger.error({ cep: cleanCep }, 'AwesomeAPI: Unexpected code path - all retries exhausted without throw')
+    throw new Error('AwesomeAPI: All retry attempts exhausted')
   }
 
   private sleep(ms: number): Promise<void> {

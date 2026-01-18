@@ -2,7 +2,7 @@ import { Redis } from 'ioredis'
 import { AddressData, AddressProvider } from './address-provider.interface'
 import { logger } from '@lib/logger'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
-import { ResilientCache, ResilientCacheOptions } from '@lib/redis/helper/resilient-cache'
+import { ResilientCache, ResilientCacheOptions, CachedFailureError } from '@lib/redis/helper/resilient-cache'
 import { NoAddressProviderError } from './error/no-address-provider-error'
 import { AddressProviderFailureError } from './error/address-provider-failure-error'
 
@@ -32,7 +32,6 @@ export class ResilientAddressProvider implements AddressProvider {
     })
   }
 
-  // UPDATE: Now accepts 'signal' from the UseCase
   async fetchAddress(cep: string, signal?: AbortSignal): Promise<AddressData | null> {
     const cleanCep = cep.replace(/\D/g, '')
 
@@ -41,76 +40,125 @@ export class ResilientAddressProvider implements AddressProvider {
       cep: cleanCep,
     })
 
-    // 1. Use getOrFetch with proper typing allowing 'null' (Negative Cache)
-    return this.cacheManager.getOrFetch<AddressData | null>(
-      cacheKey,
-      async (effectiveSignal) => {
-        // 2. Pass the coordinated signal to the strategy
-        return this.executeStrategy(cleanCep, effectiveSignal)
-      },
-      signal, // 3. Pass the parent signal (Global 25s timeout)
-    )
+    try {
+      return await this.cacheManager.getOrFetch<AddressData>(
+        cacheKey,
+        async (effectiveSignal) => {
+          return await this.executeStrategy(cleanCep, effectiveSignal)
+        },
+        // errorMapper: Cache business errors (invalid CEP)
+        (error) => {
+          if (error instanceof InvalidCepError) {
+            return {
+              type: 'InvalidCepError',
+              message: error.message,
+              data: { cep: cleanCep },
+            }
+          }
+          // System errors (network, timeouts, rate limits) - don't cache
+          return null
+        },
+        signal,
+      )
+    } catch (error) {
+      // Convert CachedFailureError back to domain error
+      if (error instanceof CachedFailureError) {
+        if (error.errorType === 'InvalidCepError') {
+          throw new InvalidCepError()
+        }
+        // Unexpected cached error type
+        logger.error({ cep: cleanCep, cachedError: error }, 'Unexpected cached error type in address fetch')
+        throw new AddressProviderFailureError()
+      }
+
+      // Re-throw domain and system errors as-is
+      throw error
+    }
   }
 
-  private async executeStrategy(cep: string, signal: AbortSignal): Promise<AddressData | null> {
-    let lastError: Error | null = null
+  private async executeStrategy(cep: string, signal: AbortSignal): Promise<AddressData> {
+    let lastError: Error | unknown = undefined
     let hasSystemError = false
+    let lastProviderName = ''
+    let notFoundCount = 0
 
     for (const [index, provider] of this.providers.entries()) {
       const providerName = provider.constructor.name
 
-      // Defensive check: If we are already aborted before starting the next provider, stop.
+      // Defensive check: Stop immediately if timeout/abort fired
       if (signal.aborted) {
         throw signal.reason
       }
 
       try {
-        // [CRITICAL] Pass the signal to the specific provider (ViaCep/AwesomeAPI)
-        // Note: Ideally, specific providers should also accept 'signal'.
-        // If they don't yet, they will run to completion, but we won't wait for them here if signal aborts.
         const result = await provider.fetchAddress(cep, signal)
 
         if (result) {
           logger.info({ provider: providerName }, 'Endereço obtido com sucesso por um provedor de endereço')
           return result
         }
+
+        // Provider returned null (not found) - count and try next provider
+        notFoundCount++
+        logger.info({ provider: providerName }, 'Provedor retornou null (não encontrado) - tentando próximo')
       } catch (error) {
-        // 1. Check for Abort/Timeout first
         if (signal.aborted) {
           throw signal.reason
         }
 
-        // 2. Logic Error: Provider explicitly confirmed CEP doesn't exist
-        // (e.g., ViaCEP returned { erro: true })
+        // Business Error: Provider explicitly confirmed CEP doesn't exist
         if (error instanceof InvalidCepError) {
-          // If one provider says it's invalid, we usually trust it and stop trying others
-          // to avoid wasting resources, OR we can treat it as a "vote" and try others.
-          // In this architecture, usually "Invalid" means truly invalid.
-          // We throw it so getOrFetch can catch it and store 'null'.
-          throw error
+          notFoundCount++
+          logger.info({ provider: providerName, cep }, 'CEP inválido reportado por provedor - tentando próximo')
+          continue
         }
 
-        // 3. System Error: Network, Timeout, Rate Limit, 500s
+        // Check if error is 404 - treat as "not found" and try next provider
+        if (error && typeof error === 'object' && 'status' in error && error.status === 404) {
+          notFoundCount++
+          logger.info({ provider: providerName }, 'Provedor retornou 404 (Não Encontrado) - tentando próximo')
+          continue
+        }
+
+        // SYSTEM ERROR: Record that a system error occurred
         hasSystemError = true
-        lastError = error as Error
+        lastError = error
+        lastProviderName = providerName
+        const errMsg = error instanceof Error ? error.message : String(error)
+
         logger.warn(
-          { provider: providerName, error: lastError.message },
+          { provider: providerName, error: errMsg, attempt: index + 1 },
           'Provedor falhou (Erro de Sistema). Alternando para fallback...',
         )
       }
     }
 
     // === DECISION PHASE ===
-
+    // Priority 1: If we had system errors, throw the last error (won't be cached)
+    // This ensures we retry when providers are unstable, even if some said "not found"
     if (hasSystemError) {
-      // If we had system errors and no success, we throw the error.
-      // ResilientCache will NOT cache this, allowing a retry.
-      logger.error({ cep, lastError }, 'Provedores de endereço falharam com erros de sistema (abortando cache)')
+      logger.error(
+        { cep, lastError, provider: lastProviderName, notFoundCount },
+        'Provedores de endereço falharam com erros de sistema (não cacheando)',
+      )
       throw lastError || new AddressProviderFailureError()
     }
 
-    // If we simply found nothing (no errors, just empty results), we return null.
-    // ResilientCache will cache this as null (Negative Cache).
-    return null
+    // Priority 2: ALL providers returned null/404/InvalidCepError (no system errors)
+    // Only throw InvalidCepError if ALL providers confirmed it doesn't exist
+    if (notFoundCount === this.providers.length) {
+      logger.info(
+        { cep, notFoundCount, totalProviders: this.providers.length },
+        'TODOS os provedores confirmaram CEP inválido - cacheando como não encontrado',
+      )
+      throw new InvalidCepError()
+    }
+
+    // This should be unreachable, but as safety net
+    logger.error(
+      { cep, notFoundCount, totalProviders: this.providers.length },
+      'Unexpected code path: partial not-found without system errors',
+    )
+    throw new AddressProviderFailureError()
   }
 }

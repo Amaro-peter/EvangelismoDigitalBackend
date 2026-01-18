@@ -2,9 +2,10 @@ import { Redis } from 'ioredis'
 import { GeoCacheScope, GeocodingProvider, GeoCoordinates, GeoSearchOptions } from './geo-provider.interface'
 import { logger } from '@lib/logger'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
-import { ResilientCache, ResilientCacheOptions } from '@lib/redis/helper/resilient-cache'
+import { ResilientCache, ResilientCacheOptions, CachedFailureError } from '@lib/redis/helper/resilient-cache'
 import { NoGeoProviderError } from './error/no-geo-provider-error'
 import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
+import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-found-error'
 
 export class ResilientGeoProvider implements GeocodingProvider {
   private readonly cacheManager: ResilientCache
@@ -31,15 +32,43 @@ export class ResilientGeoProvider implements GeocodingProvider {
   async search(query: string, signal?: AbortSignal): Promise<GeoCoordinates | null> {
     const cacheKey = this.cacheManager.generateKey({ _method: GeoCacheScope.SEARCH, q: query })
 
-    // [CRITICAL] 1. Use getOrFetch with proper typing allowing 'null'
-    return this.cacheManager.getOrFetch<GeoCoordinates | null>(
-      cacheKey,
-      async (effectiveSignal) => {
-        // [CRITICAL] 2. Execute strategy with the COORDINATED signal (Timeout + Global)
-        return this.executeStrategy((provider, innerSignal) => provider.search(query, innerSignal), effectiveSignal)
-      },
-      signal, // 3. Pass parent signal (25s Global Timeout)
-    )
+    try {
+      return await this.cacheManager.getOrFetch<GeoCoordinates>(
+        cacheKey,
+        async (effectiveSignal) => {
+          return await this.executeStrategy(
+            (provider, innerSignal) => provider.search(query, innerSignal),
+            effectiveSignal,
+          )
+        },
+        // errorMapper: Cache business errors (coordinates not found)
+        (error) => {
+          if (error instanceof CoordinatesNotFoundError) {
+            return {
+              type: 'CoordinatesNotFoundError',
+              message: error.message,
+              data: { query },
+            }
+          }
+          // System errors (rate limits, network issues) - don't cache
+          return null
+        },
+        signal,
+      )
+    } catch (error) {
+      // Convert CachedFailureError back to domain error
+      if (error instanceof CachedFailureError) {
+        if (error.errorType === 'CoordinatesNotFoundError') {
+          throw new CoordinatesNotFoundError()
+        }
+        // Unexpected cached error type
+        logger.error({ query, cachedError: error }, 'Unexpected cached error type in geo search')
+        throw new GeoProviderFailureError()
+      }
+
+      // Re-throw domain and system errors as-is
+      throw error
+    }
   }
 
   async searchStructured(options: GeoSearchOptions, signal?: AbortSignal): Promise<GeoCoordinates | null> {
@@ -48,24 +77,53 @@ export class ResilientGeoProvider implements GeocodingProvider {
       ...options,
     })
 
-    return this.cacheManager.getOrFetch<GeoCoordinates | null>(
-      cacheKey,
-      async (effectiveSignal) => {
-        return this.executeStrategy(
-          (provider, innerSignal) => provider.searchStructured(options, innerSignal),
-          effectiveSignal,
-        )
-      },
-      signal,
-    )
+    try {
+      return await this.cacheManager.getOrFetch<GeoCoordinates>(
+        cacheKey,
+        async (effectiveSignal) => {
+          return await this.executeStrategy(
+            (provider, innerSignal) => provider.searchStructured(options, innerSignal),
+            effectiveSignal,
+          )
+        },
+        // errorMapper: Cache business errors (coordinates not found)
+        (error) => {
+          if (error instanceof CoordinatesNotFoundError) {
+            return {
+              type: 'CoordinatesNotFoundError',
+              message: error.message,
+              data: { options },
+            }
+          }
+          // System errors (rate limits, network issues) - don't cache
+          return null
+        },
+        signal,
+      )
+    } catch (error) {
+      // Convert CachedFailureError back to domain error
+      if (error instanceof CachedFailureError) {
+        if (error.errorType === 'CoordinatesNotFoundError') {
+          throw new CoordinatesNotFoundError()
+        }
+        // Unexpected cached error type
+        logger.error({ options, cachedError: error }, 'Unexpected cached error type in structured search')
+        throw new GeoProviderFailureError()
+      }
+
+      // Re-throw domain and system errors as-is
+      throw error
+    }
   }
 
   private async executeStrategy(
     action: (provider: GeocodingProvider, signal: AbortSignal) => Promise<GeoCoordinates | null>,
     signal: AbortSignal,
-  ): Promise<GeoCoordinates | null> {
-    let lastError: unknown = null
+  ): Promise<GeoCoordinates> {
+    let lastError: Error | unknown = undefined
     let hasSystemError = false
+    let lastProviderName = ''
+    let notFoundCount = 0
 
     for (const [index, provider] of this.providers.entries()) {
       const providerName = provider.constructor.name
@@ -76,7 +134,6 @@ export class ResilientGeoProvider implements GeocodingProvider {
       }
 
       try {
-        // [CRITICAL] 3. Pass signal to the action (which calls the provider)
         const result = await action(provider, signal)
 
         if (result !== null) {
@@ -84,16 +141,30 @@ export class ResilientGeoProvider implements GeocodingProvider {
           return result
         }
 
-        logger.warn({ provider: providerName }, 'Provedor retornou sem resultados (Não Encontrado)')
+        // Provider returned null (not found) - try next provider
+        logger.info({ provider: providerName }, 'Provedor retornou null (não encontrado) - tentando próximo')
       } catch (error) {
-        // Check for Abort immediately in catch
         if (signal.aborted) {
           throw signal.reason
         }
 
-        // SYSTEM FAIL: Record that a system error occurred
+        if (error instanceof CoordinatesNotFoundError) {
+          notFoundCount++
+          logger.info({ provider: providerName }, 'Coordenadas não encontradas - tentando próximo')
+          continue
+        }
+
+        // Check if error is 404 - treat as "not found" and try next provider
+        if (error && typeof error === 'object' && 'status' in error && error.status === 404) {
+          notFoundCount++
+          logger.info({ provider: providerName }, 'Provedor retornou 404 (Não Encontrado) - tentando próximo')
+          continue
+        }
+
+        // SYSTEM ERROR: Record that a system error occurred
         hasSystemError = true
         lastError = error
+        lastProviderName = providerName
         const errMsg = error instanceof Error ? error.message : String(error)
 
         if (error instanceof GeoServiceBusyError) {
@@ -108,15 +179,22 @@ export class ResilientGeoProvider implements GeocodingProvider {
     }
 
     // === DECISION PHASE ===
+    // If we had system errors, throw the last error (won't be cached)
     if (hasSystemError) {
-      // Throw error so ResilientCache DOES NOT cache the failure.
-      // This allows the next request to try again.
-      logger.error({ lastError }, 'Geocodificação falhou com erros de sistema (abortando cache)')
+      logger.error(
+        { lastError, provider: lastProviderName },
+        'Geocodificação falhou com erros de sistema (não cacheando)',
+      )
       throw lastError || new GeoProviderFailureError()
     }
 
-    // If no system errors occurred but we found nothing (e.g., all returned null),
-    // return null so ResilientCache stores it (Negative Caching).
-    return null
+    // All providers returned null or 404 (no system errors)
+    // This is a business error: coordinates legitimately don't exist
+    if (notFoundCount === this.providers.length) {
+      logger.info('Nenhum provedor retornou resultados - coordenadas não encontradas')
+      throw new CoordinatesNotFoundError()
+    }
+
+    throw new GeoProviderFailureError()
   }
 }
