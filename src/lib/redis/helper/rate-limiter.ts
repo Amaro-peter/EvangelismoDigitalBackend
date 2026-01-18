@@ -52,3 +52,7 @@ export class RedisRateLimiter {
     }
   }
 }
+
+export function createRedisRateLimiter(redisConnection: Redis): RedisRateLimiter {
+  return new RedisRateLimiter(redisConnection)
+}

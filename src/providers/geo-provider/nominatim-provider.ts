@@ -14,7 +14,6 @@ type NominatimSearchParams = Record<string, string | number | undefined>
 
 export class NominatimGeoProvider implements GeocodingProvider {
   private static api: AxiosInstance
-  private readonly rateLimiter: RedisRateLimiter
 
   // Fail-Fast Configuration: 1 request per second max
   private readonly RATE_LIMIT_MAX = 1
@@ -30,11 +29,9 @@ export class NominatimGeoProvider implements GeocodingProvider {
   private readonly HTTPS_AGENT_TIMEOUT = 60000
 
   constructor(
-    redisConnection: Redis,
     private readonly config: NominatimConfig,
+    private readonly rateLimiter: RedisRateLimiter,
   ) {
-    this.rateLimiter = new RedisRateLimiter(redisConnection)
-
     if (!NominatimGeoProvider.api) {
       NominatimGeoProvider.api = createHttpClient({
         baseURL: this.config.apiUrl,

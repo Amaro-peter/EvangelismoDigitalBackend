@@ -1,5 +1,4 @@
 import { AxiosError, AxiosInstance } from 'axios'
-import { Redis } from 'ioredis'
 import { AddressData, AddressProvider } from './address-provider.interface'
 import { logger } from '@lib/logger'
 import { createHttpClient } from '@lib/http/axios'
@@ -13,8 +12,6 @@ export interface AwesomeApiConfig {
 
 export class AwesomeApiProvider implements AddressProvider {
   private static api: AxiosInstance
-  private readonly redis: Redis
-  private readonly rateLimiter: RedisRateLimiter
 
   // Configuração Fail-Fast: 5 requisições por segundo
   private readonly RATE_LIMIT_MAX = 5
@@ -31,12 +28,9 @@ export class AwesomeApiProvider implements AddressProvider {
   private readonly HTTPS_AGENT_TIMEOUT = 60000
 
   constructor(
-    redisConnection: Redis,
     private readonly config: AwesomeApiConfig,
+    private readonly rateLimiter: RedisRateLimiter,
   ) {
-    this.redis = redisConnection
-    this.rateLimiter = new RedisRateLimiter(redisConnection)
-
     if (!AwesomeApiProvider.api) {
       AwesomeApiProvider.api = createHttpClient({
         baseURL: this.config.apiUrl,

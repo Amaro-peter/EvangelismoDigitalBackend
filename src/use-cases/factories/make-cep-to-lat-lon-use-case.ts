@@ -7,30 +7,43 @@ import { LocationIqProvider } from 'providers/geo-provider/location-iq-provider'
 import { ResilientGeoProvider } from 'providers/geo-provider/resilient-geo-provider'
 import { env } from '@env/index'
 import { createRedisCacheConnection } from '@lib/redis/redis-cache-connection'
+import { createRedisRateLimiterConnection } from '@lib/redis/redis-rate-limiter-connection'
+import { createRedisRateLimiter } from '@lib/redis/helper/rate-limiter'
 
-const redis = createRedisCacheConnection()
+const cacheConnection = createRedisCacheConnection()
 
-// 1. Variable to hold the singleton instance
+const rateLimitConnection = createRedisRateLimiterConnection()
+
+const sharedRateLimiter = createRedisRateLimiter(rateLimitConnection)
+
 let cachedUseCase: CepToLatLonUseCase | null = null
 
-export function makeCepToLatLonUseCase(redisConnection = redis) {
-  // 2. Return the existing instance if it has already been created
+export function makeCepToLatLonUseCase(
+  redisCacheConnection = cacheConnection,
+  redisRateLimitConnection = sharedRateLimiter,
+): CepToLatLonUseCase {
   if (cachedUseCase) {
     return cachedUseCase
   }
 
   // Setup Geocoding Providers
-  const nominatimProvider = new NominatimGeoProvider(redisConnection, {
-    apiUrl: env.NOMINATIM_API_URL,
-  })
+  const nominatimProvider = new NominatimGeoProvider(
+    {
+      apiUrl: env.NOMINATIM_API_URL,
+    },
+    redisRateLimitConnection,
+  )
 
-  const locationIqProvider = new LocationIqProvider(redisConnection, {
-    apiUrl: env.LOCATION_IQ_API_URL,
-    apiToken: env.LOCATION_IQ_API_TOKEN,
-  })
+  const locationIqProvider = new LocationIqProvider(
+    {
+      apiUrl: env.LOCATION_IQ_API_URL,
+      apiToken: env.LOCATION_IQ_API_TOKEN,
+    },
+    redisRateLimitConnection,
+  )
 
   // Setup Resilient Geo Strategy
-  const resilientGeoProvider = new ResilientGeoProvider([locationIqProvider, nominatimProvider], redisConnection, {
+  const resilientGeoProvider = new ResilientGeoProvider([locationIqProvider, nominatimProvider], redisCacheConnection, {
     prefix: 'cache:geocoding:',
     defaultTtlSeconds: 60 * 60 * 24 * 7, // 7 days
     negativeTtlSeconds: 60 * 30, // 30 minutes (Negative Cache)
@@ -39,25 +52,35 @@ export function makeCepToLatLonUseCase(redisConnection = redis) {
   })
 
   // Setup Address Providers
-  const awesomeApiProvider = new AwesomeApiProvider(redisConnection, {
-    apiUrl: env.AWESOME_API_URL,
-    apiToken: env.AWESOME_API_TOKEN,
-  })
+  const awesomeApiProvider = new AwesomeApiProvider(
+    {
+      apiUrl: env.AWESOME_API_URL,
+      apiToken: env.AWESOME_API_TOKEN,
+    },
+    redisRateLimitConnection,
+  )
 
-  const viaCepProvider = new ViaCepProvider(redisConnection, {
-    apiUrl: env.VIACEP_API_URL,
-  })
+  const viaCepProvider = new ViaCepProvider(
+    {
+      apiUrl: env.VIACEP_API_URL,
+    },
+    redisRateLimitConnection,
+  )
 
-  const resilientAddressProvider = new ResilientAddressProvider([awesomeApiProvider, viaCepProvider], redisConnection, {
-    prefix: 'cache:cep:',
-    defaultTtlSeconds: 60 * 60 * 24 * 7, // 7 days
-    negativeTtlSeconds: 60 * 30, // 30 minutes
-    maxPendingFetches: 500,
-    fetchTimeoutMs: 8000,
-  })
+  const resilientAddressProvider = new ResilientAddressProvider(
+    [awesomeApiProvider, viaCepProvider],
+    redisCacheConnection,
+    {
+      prefix: 'cache:cep:',
+      defaultTtlSeconds: 60 * 60 * 24 * 7, // 7 days
+      negativeTtlSeconds: 60 * 30, // 30 minutes
+      maxPendingFetches: 500,
+      fetchTimeoutMs: 8000,
+    },
+  )
 
   // Create Use Case
-  cachedUseCase = new CepToLatLonUseCase(resilientGeoProvider, resilientAddressProvider, redisConnection, {
+  cachedUseCase = new CepToLatLonUseCase(resilientGeoProvider, resilientAddressProvider, redisCacheConnection, {
     prefix: 'cache:cep-coords:',
     defaultTtlSeconds: 60 * 60 * 24 * 7, // 7 days
     negativeTtlSeconds: 60 * 30, // 30 minutes (Negative Cache)
