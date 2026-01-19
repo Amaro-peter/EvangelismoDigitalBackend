@@ -875,8 +875,8 @@ describe('ResilientCache - Integration Tests', () => {
 
       await expect(cache.getOrFetch('key:typed-error', fetcher, errorMapper)).rejects.toMatchObject({
         name: 'CachedFailureError',
-        isCachedFailure: true,
-        cause: rootError,
+        message: 'boom',
+        errorType: 'Error',
       })
     })
 
@@ -899,12 +899,16 @@ describe('ResilientCache - Integration Tests', () => {
       const p1 = cache.getOrFetch('key:mixed', fetcher, errorMapper)
       const p2 = cache.getOrFetch('key:mixed', fetcher, errorMapper)
 
+      // KEY FIX: Create expectation promises BEFORE running timers
+      // This attaches the rejection handlers immediately, preventing "Unhandled Rejection"
+      const p1Expect = expect(p1).rejects.toBeInstanceOf(CachedFailureError)
+      const p2Expect = expect(p2).rejects.toBeInstanceOf(CachedFailureError)
+
+      // Now run timers to trigger the rejection
       await vi.runAllTimersAsync()
 
-      await expect(p1).rejects.toBeInstanceOf(Error)
-      await expect(p2).rejects.toMatchObject({
-        isCachedFailure: true,
-      })
+      // Await results
+      await Promise.all([p1Expect, p2Expect])
 
       expect(fetcher).toHaveBeenCalledTimes(1)
     })
@@ -966,4 +970,3 @@ describe('ResilientCache - Integration Tests', () => {
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
-// ============================================================================
