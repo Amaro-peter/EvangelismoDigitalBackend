@@ -6,6 +6,7 @@ import { createHttpClient } from '@lib/http/axios'
 import { logger } from '@lib/logger'
 import { RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
 import { LocationIqProviderError } from './error/location-iq-error'
+import { PrecisionHelper } from 'providers/helpers/precision-helper'
 
 export interface LocationIqConfig {
   apiUrl: string
@@ -115,7 +116,7 @@ export class LocationIqProvider implements GeocodingProvider {
         return {
           lat: parseFloat(bestMatch.lat),
           lon: parseFloat(bestMatch.lon),
-          precision: this.determinePrecision(bestMatch),
+          precision: PrecisionHelper.fromOsm(bestMatch),
         }
       } catch (error) {
         if (signal?.aborted) throw signal.reason
@@ -152,20 +153,6 @@ export class LocationIqProvider implements GeocodingProvider {
     // This should be unreachable, but as a safety net, throw last error or generic error
     logger.error({ lastError }, 'LocationIQ: Unexpected code path - all attempts exhausted without throw')
     throw lastError || new LocationIqProviderError()
-  }
-
-  private determinePrecision(item: LocationIqResponseItem): GeoPrecision {
-    const type = item.type || item.class || ''
-
-    if (['house', 'building', 'apartments', 'residential'].includes(type)) {
-      return GeoPrecision.ROOFTOP
-    }
-
-    if (item.place_rank && item.place_rank >= 26) {
-      return GeoPrecision.ROOFTOP
-    }
-
-    return GeoPrecision.CITY
   }
 
   private sleep(ms: number): Promise<void> {

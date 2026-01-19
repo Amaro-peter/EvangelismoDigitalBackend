@@ -4,10 +4,26 @@ import { logger } from '@lib/logger'
 import { createHttpClient } from '@lib/http/axios'
 import { RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
 import { AddressServiceBusyError } from '@use-cases/errors/address-service-busy-error'
+import { PrecisionHelper } from 'providers/helpers/precision-helper'
 
 export interface AwesomeApiConfig {
   apiUrl: string
   apiToken: string
+}
+
+// [MUDANÇA 2] Garantir que a interface da resposta da API esteja definida
+interface AwesomeApiResponse {
+  cep: string
+  address_type: string
+  address_name: string
+  address: string
+  state: string
+  district: string
+  lat: string
+  lng: string
+  city: string
+  city_ibge: string
+  ddd: string
 }
 
 export class AwesomeApiProvider implements AddressProvider {
@@ -36,7 +52,7 @@ export class AwesomeApiProvider implements AddressProvider {
         baseURL: this.config.apiUrl,
         timeout: this.TIMEOUT,
         headers: {
-          'x-api-key': this.config.apiToken,
+          'User-Agent': 'EvangelismoDigitalBackend/1.0',
         },
         agentOptions: {
           keepAliveMsecs: this.KEEP_ALIVE_MSECS,
@@ -51,52 +67,52 @@ export class AwesomeApiProvider implements AddressProvider {
   async fetchAddress(cep: string, signal?: AbortSignal): Promise<AddressData | null> {
     const cleanCep = cep.replace(/\D/g, '')
 
+    // Fail-Fast Rate Limit Check
+    const allowed = await this.rateLimiter.tryConsume('awesomeapi-global', this.RATE_LIMIT_MAX, this.RATE_LIMIT_WINDOW)
+
+    if (!allowed) {
+      throw new AddressServiceBusyError('AwesomeAPI (Rate Limit Exceeded)')
+    }
+
     for (let attempt = 1; attempt <= this.MAX_RETRIES; attempt++) {
       if (signal?.aborted) {
         throw signal.reason
       }
 
-      // Fail-Fast Rate Limit Check
-      const allowed = await this.rateLimiter.tryConsume(
-        'awesomeapi-global',
-        this.RATE_LIMIT_MAX,
-        this.RATE_LIMIT_WINDOW,
-      )
-
-      if (!allowed) {
-        throw new AddressServiceBusyError('AwesomeAPI (Rate Limit Exceeded)')
-      }
-
       try {
-        const response = await AwesomeApiProvider.api.get(`/json/${cleanCep}`, {
+        const { data } = await AwesomeApiProvider.api.get<AwesomeApiResponse>(`/${cleanCep}`, {
           signal,
         })
 
-        // Check if response has invalid/empty data
-        if (!response.data || (!response.data.city && !response.data.state)) {
-          logger.warn({ cep: cleanCep, attempt }, 'CEP inválido/vazio retornado pela AwesomeAPI')
-          // Return null so ResilientAddressProvider can try next provider
+        if (!data || !data.cep) {
           return null
         }
 
-        const { address, district, city, state, lat, lng } = response.data
+        // [MUDANÇA 3] Normalizar dados para o PrecisionHelper
+        // A AwesomeAPI usa 'address_name' para rua e 'district' para bairro
+        const normalizedData = {
+          logradouro: data.address_name,
+          bairro: data.district,
+          localidade: data.city,
+          uf: data.state,
+        }
 
-        logger.info({ cep: cleanCep, attempt }, 'Endereço obtido com sucesso da AwesomeAPI')
+        const precision = PrecisionHelper.fromAddressData(normalizedData)
 
         return {
-          logradouro: address,
-          bairro: district,
-          localidade: city,
-          uf: state,
-          lat: lat ? parseFloat(lat) : undefined,
-          lon: lng ? parseFloat(lng) : undefined,
+          logradouro: data.address_name,
+          bairro: data.district,
+          localidade: data.city,
+          uf: data.state,
+          lat: parseFloat(data.lat),
+          lon: parseFloat(data.lng),
+          precision: precision,
         }
       } catch (error) {
         if (signal?.aborted) {
           throw signal.reason
         }
 
-        // If rate limit error (thrown above), don't retry locally, propagate it
         if (error instanceof AddressServiceBusyError) {
           throw error
         }
@@ -130,7 +146,7 @@ export class AwesomeApiProvider implements AddressProvider {
 
     // This should be unreachable due to retry logic, but as safety net
     logger.error({ cep: cleanCep }, 'AwesomeAPI: Unexpected code path - all retries exhausted without throw')
-    throw new Error('AwesomeAPI: All retry attempts exhausted')
+    throw new Error('Unexpected error in AwesomeApiProvider')
   }
 
   private sleep(ms: number): Promise<void> {

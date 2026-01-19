@@ -58,6 +58,13 @@ export default defineConfig(({ mode }) => {
         {
           extends: true,
           test: {
+            name: 'unit-address-provider',
+            dir: 'src/providers/address-provider',
+          },
+        },
+        {
+          extends: true,
+          test: {
             name: 'unit-resilient-cache',
             dir: 'src/lib/redis/helper',
           },

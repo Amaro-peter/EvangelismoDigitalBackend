@@ -2,6 +2,7 @@ export enum GeoPrecision {
   ROOFTOP = 'ROOFTOP',
   NEIGHBORHOOD = 'NEIGHBORHOOD',
   CITY = 'CITY',
+  NO_CERTAINTY = 'NO_CERTAINTY',
 }
 
 export interface GeoCoordinates {

@@ -1,3 +1,5 @@
+import { GeoPrecision } from 'providers/geo-provider/geo-provider.interface'
+
 export interface AddressData {
   logradouro?: string
   bairro?: string
@@ -5,6 +7,7 @@ export interface AddressData {
   uf: string
   lat?: number
   lon?: number
+  precision?: GeoPrecision
 }
 
 export interface AddressProvider {

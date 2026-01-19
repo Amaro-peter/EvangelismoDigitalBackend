@@ -150,12 +150,7 @@ export class CepToLatLonUseCase {
         return {
           userLat: data.lat,
           userLon: data.lon,
-          // Heuristic: If street is present, it's Rooftop precision. If only neighborhood, Neighborhood precision.
-          precision: data.logradouro
-            ? GeoPrecision.ROOFTOP
-            : data.bairro
-              ? GeoPrecision.NEIGHBORHOOD
-              : GeoPrecision.CITY,
+          precision: data.precision || GeoPrecision.NO_CERTAINTY,
         }
       }
 

@@ -5,6 +5,7 @@ import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { createHttpClient } from '@lib/http/axios'
 import { logger } from '@lib/logger'
 import { RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
+import { PrecisionHelper } from 'providers/helpers/precision-helper'
 
 export interface NominatimConfig {
   apiUrl: string
@@ -93,7 +94,7 @@ export class NominatimGeoProvider implements GeocodingProvider {
       return {
         lat: parseFloat(bestMatch.lat),
         lon: parseFloat(bestMatch.lon),
-        precision: this.determinePrecision(bestMatch),
+        precision: PrecisionHelper.fromOsm(bestMatch),
       }
     } catch (error) {
       if (signal?.aborted) {
@@ -118,25 +119,6 @@ export class NominatimGeoProvider implements GeocodingProvider {
       logger.warn({ error: err.message, status }, 'Nominatim Provider Failed')
       throw error
     }
-  }
-
-  private determinePrecision(item: any): GeoPrecision {
-    const type = item.addresstype || item.type || ''
-
-    if (['house', 'building', 'apartments', 'residential'].includes(type)) return GeoPrecision.ROOFTOP
-    if (['secondary', 'tertiary', 'primary', 'road', 'way', 'highway'].includes(type)) return GeoPrecision.ROOFTOP
-
-    if (['neighbourhood', 'suburb', 'quarter', 'hamlet', 'village'].includes(type)) return GeoPrecision.NEIGHBORHOOD
-
-    if (['city', 'town', 'municipality', 'administrative'].includes(type)) return GeoPrecision.CITY
-
-    if (item.place_rank) {
-      if (item.place_rank >= 26) return GeoPrecision.ROOFTOP
-      if (item.place_rank >= 16) return GeoPrecision.NEIGHBORHOOD
-      return GeoPrecision.CITY
-    }
-
-    return GeoPrecision.CITY
   }
 
   private cleanParams(params: NominatimSearchParams): Record<string, string | number> {
