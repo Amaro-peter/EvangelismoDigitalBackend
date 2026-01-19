@@ -56,18 +56,6 @@ export async function findNearestChurches(
 
     return reply.status(200).send({ churches: sanitizedChurches, totalFound, precision })
   } catch (error) {
-    if (error instanceof InvalidCepError) {
-      return reply.status(400).send({
-        message: error.message,
-      })
-    }
-
-    if (error instanceof CoordinatesNotFoundError) {
-      return reply.status(400).send({
-        message: error.message,
-      })
-    }
-
     if (error instanceof LatitudeRangeError || error instanceof LongitudeRangeError) {
       logger.warn({
         msg: 'Invalid coordinates provided',
@@ -76,24 +64,6 @@ export async function findNearestChurches(
       })
 
       return reply.status(400).send({ message: error.message })
-    }
-
-    if (error instanceof GeoServiceBusyError) {
-      return reply.status(429).send({ message: error.message })
-    }
-
-    if (error instanceof AddressServiceBusyError) {
-      return reply.status(429).send({ message: error.message })
-    }
-
-    if (error instanceof ServiceOverloadError) {
-      return reply.status(503).send({
-        message: error.message,
-      })
-    }
-
-    if (error instanceof TimeoutExceedOnFetchError) {
-      return reply.status(504).send({ message: error.message })
     }
 
     logger.error({

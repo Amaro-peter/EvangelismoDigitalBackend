@@ -142,6 +142,7 @@ export class ResilientGeoProvider implements GeocodingProvider {
         }
 
         // Provider returned null (not found) - try next provider
+        notFoundCount++
         logger.info({ provider: providerName }, 'Provedor retornou null (não encontrado) - tentando próximo')
       } catch (error) {
         if (signal.aborted) {
