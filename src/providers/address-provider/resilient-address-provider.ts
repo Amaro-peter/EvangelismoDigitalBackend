@@ -5,6 +5,7 @@ import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 import { ResilientCache, ResilientCacheOptions, CachedFailureError } from '@lib/redis/helper/resilient-cache'
 import { NoAddressProviderError } from './error/no-address-provider-error'
 import { AddressProviderFailureError } from './error/address-provider-failure-error'
+import { AddressServiceBusyError } from '@use-cases/errors/address-service-busy-error'
 
 enum AddressCacheScope {
   CEP = 'cep',
@@ -126,10 +127,14 @@ export class ResilientAddressProvider implements AddressProvider {
         lastProviderName = providerName
         const errMsg = error instanceof Error ? error.message : String(error)
 
-        logger.warn(
-          { provider: providerName, error: errMsg, attempt: index + 1 },
-          'Provedor falhou (Erro de Sistema). Alternando para fallback...',
-        )
+        if (error instanceof AddressServiceBusyError) {
+          logger.warn(
+            { provider: providerName, error: errMsg, attempt: index + 1 },
+            'Provedor falhou (Erro de Sistema). Alternando para fallback...',
+          )
+        } else {
+          logger.warn({ provider: providerName, error: errMsg }, 'Provedor falhou (Erro de Sistema). Alternando...')
+        }
       }
     }
 

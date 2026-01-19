@@ -5,8 +5,11 @@ import { GeocodingProvider, GeoCoordinates, GeoPrecision } from 'providers/geo-p
 import { Redis } from 'ioredis'
 import { logger } from '@lib/logger'
 import { ResilientCache, ResilientCacheOptions, CachedFailureError } from '@lib/redis/helper/resilient-cache'
-import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
+import { CepToLatLonError } from '@use-cases/errors/cep-to-lat-lon-error'
+import { TimeoutExceedOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
+import { ServiceOverloadError } from '@lib/redis/errors/service-overload-error'
+import { AddressServiceBusyError } from '@use-cases/errors/address-service-busy-error'
 
 interface CepToLatLonRequest {
   cep: string
@@ -37,7 +40,7 @@ export class CepToLatLonUseCase {
     })
   }
 
-  async execute({ cep }: CepToLatLonRequest): Promise<CepToLatLonResponse | null> {
+  async execute({ cep }: CepToLatLonRequest): Promise<CepToLatLonResponse> {
     const cleanCep = cep.replace(/\D/g, '')
     const cacheKey = this.cacheManager.generateKey({ cep: cleanCep })
 
@@ -74,6 +77,10 @@ export class CepToLatLonUseCase {
         },
       )
 
+      if (!result) {
+        throw new CepToLatLonError()
+      }
+
       return result
     } catch (error) {
       // Handle CachedFailureError - convert back to domain errors
@@ -86,20 +93,42 @@ export class CepToLatLonUseCase {
         }
         // This shouldn't happen, but fallback to generic error
         logger.error({ cep: cleanCep, cachedError: error }, 'Unexpected cached error type')
-        throw new GeoProviderFailureError()
+        throw new CepToLatLonError()
       }
 
       // Domain errors thrown directly from processCep (first fetch)
-      if (error instanceof InvalidCepError) throw error
-      if (error instanceof CoordinatesNotFoundError) throw error
+      if (error instanceof InvalidCepError) {
+        throw error
+      }
 
-      // System errors: Log and return friendly "Instability" message
-      const isRateLimit = error instanceof GeoServiceBusyError
+      if (error instanceof CoordinatesNotFoundError) {
+        throw error
+      }
 
-      logger.error({ cep: cleanCep, error, isRateLimit }, 'Critical failure in CepToLatLonUseCase (System Fail)')
+      if (error instanceof GeoServiceBusyError) {
+        const isRateLimit = error instanceof GeoServiceBusyError
+        logger.error({ cep: cleanCep, error, isRateLimit }, 'Critical failure in CepToLatLonUseCase (System Fail)')
+        throw error
+      }
+
+      if (error instanceof AddressServiceBusyError) {
+        const isRateLimit = error instanceof AddressServiceBusyError
+        logger.error({ cep: cleanCep, error, isRateLimit }, 'Critical failure in CepToLatLonUseCase (System Fail)')
+        throw error
+      }
+
+      if (error instanceof TimeoutExceedOnFetchError) {
+        logger.warn({ cep: cleanCep }, 'Operation timed out. Bubbling up.')
+        throw error
+      }
+
+      if (error instanceof ServiceOverloadError) {
+        logger.warn({ cep: cleanCep }, 'Service overload (Circuit Breaker). Bubbling up.')
+        throw error
+      }
 
       // Throw user-friendly error message ("Instabilidade temporária...")
-      throw new GeoProviderFailureError()
+      throw new CepToLatLonError()
     }
   }
 
@@ -192,7 +221,7 @@ export class CepToLatLonUseCase {
     logger.error({ cep: cleanCep, city: localidade }, 'Critical: Geocoder could not find city. System error.')
 
     // This is a system error - won't be cached
-    throw new GeoProviderFailureError()
+    throw new CepToLatLonError()
   }
 
   private mapResponse(coords: GeoCoordinates): CepToLatLonResponse {

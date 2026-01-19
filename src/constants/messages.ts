@@ -28,15 +28,7 @@ export const messages = {
     formSubmissionFailed: 'Falha ao enviar o formulário.',
     createChurchFailed: 'Falha ao criar a igreja.',
     createUserFailed: 'Falha ao criar o usuário.',
-    geoProviderFailureError: `
-      Prezado usuário,
-      Não conseguimos encontrar igrejas próximas agora.
-
-      Estamos com uma instabilidade temporária ao localizar sua região a partir do CEP informado.
-
-      Você pode tentar novamente em alguns instantes ou conferir se o CEP está correto. 
-      Estamos trabalhando para normalizar o serviço o quanto antes.
-    `.trim(),
+    geoProviderFailureError: `Não foi possível localizar igrejas próximas agora. Verifique o CEP ou tente novamente mais tarde. Estamos trabalhando para normalizar o serviço.`,
     serviceOverloadError: 'Serviço sobrecarregado - tente novamente mais tarde',
     timeoutExceedOnFetch: 'Tempo limite excedido ao buscar dados externo.',
     noGeoProviderError:
@@ -47,6 +39,8 @@ export const messages = {
     addressProviderFailureError: 'Falha ao obter o endereço a partir do provedor de endereços.',
     locationIqProviderError: 'Erro ao comunicar com o provedor LocationIQ.',
     viaCepProviderError: 'Erro ao comunicar com o provedor ViaCep.',
+    cepToLatLonError:
+      'Não foi possível localizar igrejas próximas agora. Verifique o CEP ou tente novamente mais tarde. Estamos trabalhando para normalizar o serviço.',
   },
   info: {
     passwordResetGeneric: 'Se o usuário existir, você receberá um e-mail com instruções para redefinir a senha.',
