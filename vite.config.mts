@@ -72,6 +72,13 @@ export default defineConfig(({ mode }) => {
         {
           extends: true,
           test: {
+            name: 'unit-rate-limiter',
+            dir: 'src/lib/redis',
+          },
+        },
+        {
+          extends: true,
+          test: {
             name: 'e2e',
             dir: 'src/http/controllers',
             exclude: ['**/geo-real-fallback.spec.ts'],
