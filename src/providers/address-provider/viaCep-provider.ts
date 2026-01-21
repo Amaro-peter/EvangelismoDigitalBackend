@@ -2,7 +2,7 @@ import { AxiosError, AxiosInstance } from 'axios'
 import { AddressData, AddressProvider } from './address-provider.interface'
 import { logger } from '@lib/logger'
 import { createHttpClient } from '@lib/http/axios'
-import { RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
+import { EnumProviderConfig, RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
 import { AddressServiceBusyError } from '@use-cases/errors/address-service-busy-error'
 import { PrecisionHelper } from 'providers/helpers/precision-helper'
 import Redis from 'ioredis'
@@ -70,7 +70,7 @@ export class ViaCepProvider implements AddressProvider {
     // Fail-Fast Rate Limit Check
     const rateLimiter = RedisRateLimiter.getInstance(this.redisRateLimiterConnection)
 
-    const allowed = await rateLimiter.tryConsume('viacepAddressProvider')
+    const allowed = await rateLimiter.tryConsume(EnumProviderConfig.VIACEP_ADDRESS)
 
     if (!allowed) {
       throw new AddressServiceBusyError('ViaCEP (Rate Limit Exceeded)')

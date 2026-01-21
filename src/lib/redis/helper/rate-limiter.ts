@@ -48,6 +48,15 @@ type ProviderRateLimitConfig = {
   windowSeconds: number
 }
 
+export enum EnumProviderConfig {
+  AWESOME_API_ADDRESS = 'awesomeApiAddressProvider',
+  VIACEP_ADDRESS = 'viacepAddressProvider',
+  LOCATION_IQ_ADDRESS = 'locationIqAddressProvider',
+  BRASIL_API_ADDRESS = 'brasilApiAddressProvider',
+  NOMINATIM_GEOCODING = 'nominatimGeocodingProvider',
+  LOCATION_IQ_GEOCODING = 'locationIqGeocodingProvider',
+}
+
 export class RedisRateLimiter {
   private static instance: RedisRateLimiter
   private readonly redis: Redis

@@ -4,7 +4,7 @@ import { GeocodingProvider, GeoCoordinates, GeoSearchOptions, GeoPrecision } fro
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { createHttpClient } from '@lib/http/axios'
 import { logger } from '@lib/logger'
-import { RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
+import { EnumProviderConfig, RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
 import { PrecisionHelper } from 'providers/helpers/precision-helper'
 
 export interface NominatimConfig {
@@ -73,7 +73,7 @@ export class NominatimGeoProvider implements GeocodingProvider {
     // If limit is exceeded, we throw immediately so ResilientGeoProvider switches to next provider.
     const rateLimiter = RedisRateLimiter.getInstance(this.redisRateLimiterConnection)
 
-    const allowed = await rateLimiter.tryConsume('nominatimGeocodingProvider')
+    const allowed = await rateLimiter.tryConsume(EnumProviderConfig.NOMINATIM_GEOCODING)
 
     if (!allowed) {
       throw new GeoServiceBusyError('Nominatim (Rate Limit Exceeded)')

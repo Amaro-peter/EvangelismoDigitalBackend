@@ -4,7 +4,7 @@ import { GeocodingProvider, GeoCoordinates, GeoSearchOptions, GeoPrecision } fro
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { createHttpClient } from '@lib/http/axios'
 import { logger } from '@lib/logger'
-import { RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
+import { EnumProviderConfig, RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
 import { LocationIqProviderError } from './error/location-iq-error'
 import { PrecisionHelper } from 'providers/helpers/precision-helper'
 
@@ -89,7 +89,7 @@ export class LocationIqProvider implements GeocodingProvider {
 
       const rateLimiter = RedisRateLimiter.getInstance(this.redisRateLimiterConnection)
 
-      const allowed = await rateLimiter.tryConsume('locationIqGeocodingProvider')
+      const allowed = await rateLimiter.tryConsume(EnumProviderConfig.LOCATION_IQ_GEOCODING)
 
       if (!allowed) {
         throw new GeoServiceBusyError('LocationIQ (Rate Limit Exceeded)')
