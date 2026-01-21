@@ -53,6 +53,7 @@
     "nodemailer": "7.0.5",
     "pg": "8.16.3",
     "pino": "9.9.0",
+    "rate-limiter-flexible": "9.0.1",
     "uuid": "11.1.0",
     "zod": "4.0.17"
   },

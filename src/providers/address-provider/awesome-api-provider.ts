@@ -5,6 +5,7 @@ import { createHttpClient } from '@lib/http/axios'
 import { RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
 import { AddressServiceBusyError } from '@use-cases/errors/address-service-busy-error'
 import { PrecisionHelper } from 'providers/helpers/precision-helper'
+import Redis from 'ioredis'
 
 export interface AwesomeApiConfig {
   apiUrl: string
@@ -29,9 +30,9 @@ interface AwesomeApiResponse {
 export class AwesomeApiProvider implements AddressProvider {
   private static api: AxiosInstance
 
-  // Configuração Fail-Fast: 5 requisições por segundo
-  private readonly RATE_LIMIT_MAX = 5
-  private readonly RATE_LIMIT_WINDOW = 1
+  // Configuração Fail-Fast: 5 requisições por segundo dentro do RedisRateLimiter
+  // RATE_LIMIT_MAX = 5
+  // RATE_LIMIT_WINDOW = 1
 
   private readonly MAX_RETRIES = 2
   private readonly BACKOFF_MS = 100
@@ -45,7 +46,7 @@ export class AwesomeApiProvider implements AddressProvider {
 
   constructor(
     private readonly config: AwesomeApiConfig,
-    private readonly rateLimiter: RedisRateLimiter,
+    private readonly redisRateLimiterConnection: Redis,
   ) {
     if (!AwesomeApiProvider.api) {
       AwesomeApiProvider.api = createHttpClient({
@@ -68,7 +69,9 @@ export class AwesomeApiProvider implements AddressProvider {
     const cleanCep = cep.replace(/\D/g, '')
 
     // Fail-Fast Rate Limit Check
-    const allowed = await this.rateLimiter.tryConsume('awesomeapi-global', this.RATE_LIMIT_MAX, this.RATE_LIMIT_WINDOW)
+    const rateLimiter = RedisRateLimiter.getInstance(this.redisRateLimiterConnection)
+
+    const allowed = await rateLimiter.tryConsume('awesomeApiAddressProvider')
 
     if (!allowed) {
       throw new AddressServiceBusyError('AwesomeAPI (Rate Limit Exceeded)')

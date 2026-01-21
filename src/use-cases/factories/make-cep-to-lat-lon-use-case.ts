@@ -8,19 +8,16 @@ import { ResilientGeoProvider } from 'providers/geo-provider/resilient-geo-provi
 import { env } from '@env/index'
 import { createRedisCacheConnection } from '@lib/redis/redis-cache-connection'
 import { createRedisRateLimiterConnection } from '@lib/redis/redis-rate-limiter-connection'
-import { createRedisRateLimiter } from '@lib/redis/helper/rate-limiter'
 
 const cacheConnection = createRedisCacheConnection()
 
 const rateLimitConnection = createRedisRateLimiterConnection()
 
-const sharedRateLimiter = createRedisRateLimiter(rateLimitConnection)
-
 let cachedUseCase: CepToLatLonUseCase | null = null
 
 export function makeCepToLatLonUseCase(
   redisCacheConnection = cacheConnection,
-  redisRateLimitConnection = sharedRateLimiter,
+  redisRateLimitConnection = rateLimitConnection,
 ): CepToLatLonUseCase {
   if (cachedUseCase) {
     return cachedUseCase

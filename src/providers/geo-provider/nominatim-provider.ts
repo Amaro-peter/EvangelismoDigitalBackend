@@ -16,9 +16,9 @@ type NominatimSearchParams = Record<string, string | number | undefined>
 export class NominatimGeoProvider implements GeocodingProvider {
   private static api: AxiosInstance
 
-  // Fail-Fast Configuration: 1 request per second max
-  private readonly RATE_LIMIT_MAX = 1
-  private readonly RATE_LIMIT_WINDOW = 1
+  // Fail-Fast Configuration in RedisRateLimiter: 1 request per second max
+  // RATE_LIMIT_MAX = 1
+  // RATE_LIMIT_WINDOW = 1
 
   // Nominatim API Timeout
   private readonly NOMINATIM_TIMEOUT = 4000
@@ -31,7 +31,7 @@ export class NominatimGeoProvider implements GeocodingProvider {
 
   constructor(
     private readonly config: NominatimConfig,
-    private readonly rateLimiter: RedisRateLimiter,
+    private readonly redisRateLimiterConnection: Redis,
   ) {
     if (!NominatimGeoProvider.api) {
       NominatimGeoProvider.api = createHttpClient({
@@ -71,7 +71,9 @@ export class NominatimGeoProvider implements GeocodingProvider {
   private async performRequest(params: NominatimSearchParams, signal?: AbortSignal): Promise<GeoCoordinates | null> {
     // 1. Fail-Fast Rate Limit Check
     // If limit is exceeded, we throw immediately so ResilientGeoProvider switches to next provider.
-    const allowed = await this.rateLimiter.tryConsume('nominatim-global', this.RATE_LIMIT_MAX, this.RATE_LIMIT_WINDOW)
+    const rateLimiter = RedisRateLimiter.getInstance(this.redisRateLimiterConnection)
+
+    const allowed = await rateLimiter.tryConsume('nominatimGeocodingProvider')
 
     if (!allowed) {
       throw new GeoServiceBusyError('Nominatim (Rate Limit Exceeded)')

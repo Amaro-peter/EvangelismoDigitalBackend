@@ -24,9 +24,9 @@ type LocationIqResponseItem = {
 export class LocationIqProvider implements GeocodingProvider {
   private static api: AxiosInstance
 
-  // Configuração Fail-Fast: 2 requisições por segundo
-  private readonly RATE_LIMIT_MAX = 2
-  private readonly RATE_LIMIT_WINDOW = 1
+  // Configuração Fail-Fast in RedisRateLimiter: 2 requisições por segundo
+  // RATE_LIMIT_MAX = 2
+  // RATE_LIMIT_WINDOW = 1
 
   // Timeout da API LocationIQ
   private readonly TIMEOUT = 2000
@@ -41,7 +41,7 @@ export class LocationIqProvider implements GeocodingProvider {
 
   constructor(
     private readonly config: LocationIqConfig,
-    private readonly rateLimiter: RedisRateLimiter,
+    private readonly redisRateLimiterConnection: Redis,
   ) {
     if (!LocationIqProvider.api) {
       LocationIqProvider.api = createHttpClient({
@@ -87,17 +87,11 @@ export class LocationIqProvider implements GeocodingProvider {
         throw signal.reason
       }
 
-      // Fail-Fast Rate Limit Check
-      // Verifica se temos cota para ESTA tentativa
-      const allowed = await this.rateLimiter.tryConsume(
-        'locationiq-global',
-        this.RATE_LIMIT_MAX,
-        this.RATE_LIMIT_WINDOW,
-      )
+      const rateLimiter = RedisRateLimiter.getInstance(this.redisRateLimiterConnection)
+
+      const allowed = await rateLimiter.tryConsume('locationIqGeocodingProvider')
 
       if (!allowed) {
-        // [CRÍTICO] Não espera! Falha imediatamente para que o ResilientGeoProvider
-        // possa tentar o próximo provedor (ex: Nominatim ou Google) no mesmo segundo.
         throw new GeoServiceBusyError('LocationIQ (Rate Limit Exceeded)')
       }
 

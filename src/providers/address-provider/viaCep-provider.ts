@@ -5,6 +5,7 @@ import { createHttpClient } from '@lib/http/axios'
 import { RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
 import { AddressServiceBusyError } from '@use-cases/errors/address-service-busy-error'
 import { PrecisionHelper } from 'providers/helpers/precision-helper'
+import Redis from 'ioredis'
 // [1] Importe o Helper
 
 export interface ViaCepConfig {
@@ -28,9 +29,9 @@ interface ViaCepResponse {
 export class ViaCepProvider implements AddressProvider {
   private static api: AxiosInstance
 
-  // Configuração Fail-Fast: 5 requisições por segundo
-  private readonly RATE_LIMIT_MAX = 5
-  private readonly RATE_LIMIT_WINDOW = 1
+  // Configuração Fail-Fast in RedisRateLimiter: 5 requisições por segundo
+  // RATE_LIMIT_MAX = 5
+  // RATE_LIMIT_WINDOW = 1
 
   private readonly MAX_RETRIES = 2
   private readonly BACKOFF_MS = 100
@@ -44,7 +45,7 @@ export class ViaCepProvider implements AddressProvider {
 
   constructor(
     private readonly config: ViaCepConfig,
-    private readonly rateLimiter: RedisRateLimiter,
+    private readonly redisRateLimiterConnection: Redis,
   ) {
     if (!ViaCepProvider.api) {
       ViaCepProvider.api = createHttpClient({
@@ -67,7 +68,9 @@ export class ViaCepProvider implements AddressProvider {
     const cleanCep = cep.replace(/\D/g, '')
 
     // Fail-Fast Rate Limit Check
-    const allowed = await this.rateLimiter.tryConsume('viacep-global', this.RATE_LIMIT_MAX, this.RATE_LIMIT_WINDOW)
+    const rateLimiter = RedisRateLimiter.getInstance(this.redisRateLimiterConnection)
+
+    const allowed = await rateLimiter.tryConsume('viacepAddressProvider')
 
     if (!allowed) {
       throw new AddressServiceBusyError('ViaCEP (Rate Limit Exceeded)')
