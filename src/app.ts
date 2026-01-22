@@ -11,13 +11,6 @@ import fastifyCors from '@fastify/cors'
 import rateLimit from '@fastify/rate-limit'
 import * as Sentry from '@sentry/node'
 import { nodeProfilingIntegration } from '@sentry/profiling-node'
-import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
-import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-found-error'
-import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
-import { AddressServiceBusyError } from '@use-cases/errors/address-service-busy-error'
-import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
-import { ServiceOverloadError } from '@lib/redis/errors/service-overload-error'
-
 z.config(z.locales.pt())
 
 export const app = fastify({
@@ -131,24 +124,6 @@ app.setErrorHandler((error, _request, reply) => {
   if (error instanceof SyntaxError) {
     logger.error(error, 'JSON inválido recebido')
     return reply.status(400).send({ message: messages.validation.invalidJson })
-  }
-
-  if (error instanceof InvalidCepError || error instanceof CoordinatesNotFoundError) {
-    return reply.status(400).send({ message: error.message })
-  }
-
-  // 3. Erros de Limite/Rate Limit (429 Too Many Requests)
-  if (error instanceof GeoServiceBusyError || error instanceof AddressServiceBusyError) {
-    return reply.status(429).send({ message: error.message })
-  }
-
-  if (error instanceof TimeoutExceededOnFetchError) {
-    return reply.status(504).send({ message: error.message })
-  }
-
-  // 4. Erros de Disponibilidade (503 Service Unavailable)
-  if (error instanceof ServiceOverloadError) {
-    return reply.status(503).send({ message: error.message })
   }
 
   if (env.NODE_ENV === 'development') {

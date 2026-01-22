@@ -8,6 +8,7 @@ import { ResilientGeoProvider } from 'providers/geo-provider/resilient-geo-provi
 import { env } from '@env/index'
 import { createRedisCacheConnection } from '@lib/redis/redis-cache-connection'
 import { createRedisRateLimiterConnection } from '@lib/redis/redis-rate-limiter-connection'
+import { BrasilApiProvider } from 'providers/address-provider/brasil-api-provider'
 
 const cacheConnection = createRedisCacheConnection()
 
@@ -57,6 +58,13 @@ export function makeCepToLatLonUseCase(
     redisRateLimitConnection,
   )
 
+  const brasilApiProvider = new BrasilApiProvider(
+    {
+      apiUrl: env.BRASIL_API_URL,
+    },
+    redisRateLimitConnection,
+  )
+
   const viaCepProvider = new ViaCepProvider(
     {
       apiUrl: env.VIACEP_API_URL,
@@ -65,7 +73,7 @@ export function makeCepToLatLonUseCase(
   )
 
   const resilientAddressProvider = new ResilientAddressProvider(
-    [awesomeApiProvider, viaCepProvider],
+    [awesomeApiProvider, brasilApiProvider, viaCepProvider],
     redisCacheConnection,
     {
       prefix: 'cache:cep:',

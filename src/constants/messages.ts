@@ -18,6 +18,7 @@ export const messages = {
     internalServer: 'Erro interno do servidor!',
     invalidCredentials: 'Credenciais inválidas!',
     resourceNotFound: 'Recurso não encontrado!',
+    cepDoesNotExist: 'O CEP fornecido não existe.',
     coordinatesNotFound: 'Coordenadas não encontradas para o endereço fornecido.',
     churchNotFound: 'Igreja não encontrada.',
     noAddressProvided: 'Nenhum endereço fornecido para conversão de CEP.',

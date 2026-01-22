@@ -32,10 +32,10 @@ export const options = {
       maxVUs: 100,
       startTime: '35s',
       stages: [
-        { target: 6, duration: '30s' },  // Subida suave
-        { target: 9, duration: '20s' },  // Próximo ao limite
-        { target: 13, duration: '30s' }, // Estourando limite (espera-se 429/503)
-        { target: 0, duration: '10s' },  // Resfriamento
+        { target: 10, duration: '3m' },  // Subida suave
+        { target: 14, duration: '3m' },  // Próximo ao limite
+        { target: 16, duration: '3m' }, // Estourando limite (espera-se 429/503)
+        { target: 0, duration: '30s' },  // Resfriamento
       ],
       exec: 'rateLimitTest',
     },

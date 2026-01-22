@@ -60,19 +60,20 @@ export async function findNearestChurches(
     return reply.status(200).send({ churches: sanitizedChurches, totalFound, precision })
   } catch (error) {
     // 1. Erros de Negócio (Bad Request - 400)
-    if (
-      error instanceof LatitudeRangeError ||
-      error instanceof LongitudeRangeError ||
-      error instanceof InvalidCepError
-    ) {
+    if (error instanceof LatitudeRangeError || error instanceof LongitudeRangeError) {
       logger.warn({ msg: 'Parâmetros inválidos', error: error.message })
+      return reply.status(400).send({ message: error.message })
+    }
+
+    if (error instanceof InvalidCepError) {
+      logger.warn({ msg: 'CEP inválido fornecido', cep: request.query.cep })
       return reply.status(400).send({ message: error.message })
     }
 
     // 2. Erro de Recurso Não Encontrado (Not Found - 404)
     if (error instanceof CoordinatesNotFoundError) {
       logger.info({ msg: 'Coordenadas não encontradas para o CEP', cep: request.query.cep })
-      return reply.status(404).send({ message: 'Coordinates not found for this CEP' })
+      return reply.status(404).send({ message: error.message })
     }
 
     // 3. Erros de Rate Limit (Too Many Requests - 429)

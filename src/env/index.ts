@@ -36,6 +36,7 @@ const envSchema = z.object({
   AWESOME_API_URL: z.string().url(), //Also geocoding provider
   AWESOME_API_TOKEN: z.string().min(1),
   VIACEP_API_URL: z.string().url(),
+  BRASIL_API_URL: z.string().url(),
 
   // Geocoding Providers
   // Nominatim (Fallback)
