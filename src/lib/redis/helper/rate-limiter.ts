@@ -1,7 +1,7 @@
 import { RateLimiterRedis } from 'rate-limiter-flexible'
 import Redis from 'ioredis'
 import { logger } from '@lib/logger'
-
+import { NoRateLimiterSetError } from '../errors/NoRateLimiterSetError'
 
 /**
  * DESIGN DECISION — Rate Limiting Strategy
@@ -74,7 +74,7 @@ export class RedisRateLimiter {
       windowSeconds: 1,
     },
     viacepAddressProvider: {
-      points: 5,
+      points: 1,
       windowSeconds: 1,
     },
     locationIqAddressProvider: {
@@ -114,7 +114,7 @@ export class RedisRateLimiter {
     const config = this.providerConfigs[provider]
 
     if (!config) {
-      throw new Error(`RateLimiter não configurado para o provider: ${provider}`)
+      throw new NoRateLimiterSetError(provider)
     }
 
     if (this.limiters.has(provider)) {
@@ -161,7 +161,16 @@ export class RedisRateLimiter {
       }
 
       // Falha de infraestrutura (Redis down, timeout, etc)
-      logger.error({ error, provider }, 'ERRO CRÍTICO RedisRateLimiter: Redis indisponível. Fail-Closed ativado.')
+      logger.error(
+        {
+          message: error?.message,
+          stack: error?.stack,
+          code: error?.code,
+          name: error?.name,
+          provider,
+        },
+        'ERRO CRÍTICO RedisRateLimiter: Redis indisponível. Fail-Closed ativado.',
+      )
 
       return false
     }

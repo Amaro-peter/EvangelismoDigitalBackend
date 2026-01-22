@@ -6,6 +6,7 @@ import { ResilientCache, ResilientCacheOptions, CachedFailureError } from '@lib/
 import { NoAddressProviderError } from './error/no-address-provider-error'
 import { AddressProviderFailureError } from './error/address-provider-failure-error'
 import { AddressServiceBusyError } from '@use-cases/errors/address-service-busy-error'
+import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
 
 enum AddressCacheScope {
   CEP = 'cep',
@@ -88,7 +89,7 @@ export class ResilientAddressProvider implements AddressProvider {
 
       // Defensive check: Stop immediately if timeout/abort fired
       if (signal.aborted) {
-        throw signal.reason
+        throw new TimeoutExceededOnFetchError(signal.reason)
       }
 
       try {
@@ -103,8 +104,8 @@ export class ResilientAddressProvider implements AddressProvider {
         notFoundCount++
         logger.info({ provider: providerName }, 'Provedor retornou null (não encontrado) - tentando próximo')
       } catch (error) {
-        if (signal.aborted) {
-          throw signal.reason
+        if (error instanceof TimeoutExceededOnFetchError) {
+          throw error
         }
 
         // Business Error: Provider explicitly confirmed CEP doesn't exist
@@ -146,7 +147,7 @@ export class ResilientAddressProvider implements AddressProvider {
         { cep, lastError, provider: lastProviderName, notFoundCount },
         'Provedores de endereço falharam com erros de sistema (não cacheando)',
       )
-      throw lastError || new AddressProviderFailureError()
+      throw new AddressProviderFailureError(lastError)
     }
 
     // Priority 2: ALL providers returned null/404/InvalidCepError (no system errors)

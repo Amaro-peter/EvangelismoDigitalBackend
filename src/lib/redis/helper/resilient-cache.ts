@@ -2,7 +2,7 @@ import crypto from 'crypto'
 import { Redis } from 'ioredis'
 import { logger } from '@lib/logger'
 import { ServiceOverloadError } from '../errors/service-overload-error'
-import { TimeoutExceedOnFetchError } from '../errors/timeout-exceed-on-fetch-error'
+import { TimeoutExceededOnFetchError } from '../errors/timeout-exceed-on-fetch-error'
 import { OperationAbortedError } from '../errors/operation-aborted-error'
 
 export interface ResilientCacheOptions {
@@ -172,7 +172,7 @@ export class ResilientCache {
         if (parentSignal?.aborted) {
           throw this.normalizeAbortReason(parentSignal.reason)
         }
-        throw new TimeoutExceedOnFetchError()
+        throw new TimeoutExceededOnFetchError()
       }
 
       // === ERROR CAPTURE LOGIC ===
@@ -198,12 +198,16 @@ export class ResilientCache {
 
   private normalizeAbortReason(reason: unknown): Error {
     if (reason instanceof Error) {
-      return reason
+      if (reason instanceof TimeoutExceededOnFetchError || reason instanceof OperationAbortedError) {
+        return reason
+      }
+
+      throw new TimeoutExceededOnFetchError(reason)
     }
     if (typeof reason === 'string') {
-      return new Error(reason)
+      return new TimeoutExceededOnFetchError(reason)
     }
-    return new OperationAbortedError()
+    return new OperationAbortedError(reason)
   }
 
   private async setResult<T>(key: string, envelope: CacheEnvelope<T>): Promise<void> {

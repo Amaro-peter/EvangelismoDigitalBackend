@@ -7,9 +7,11 @@ import { logger } from '@lib/logger'
 import { ResilientCache, ResilientCacheOptions, CachedFailureError } from '@lib/redis/helper/resilient-cache'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { CepToLatLonError } from '@use-cases/errors/cep-to-lat-lon-error'
-import { TimeoutExceedOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
 import { ServiceOverloadError } from '@lib/redis/errors/service-overload-error'
 import { AddressServiceBusyError } from '@use-cases/errors/address-service-busy-error'
+import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
+import { AddressProviderFailureError } from 'providers/address-provider/error/address-provider-failure-error'
+import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
 
 interface CepToLatLonRequest {
   cep: string
@@ -117,7 +119,15 @@ export class CepToLatLonUseCase {
         throw error
       }
 
-      if (error instanceof TimeoutExceedOnFetchError) {
+      if (error instanceof AddressProviderFailureError) {
+        throw error
+      }
+
+      if (error instanceof GeoProviderFailureError) {
+        throw error
+      }
+
+      if (error instanceof TimeoutExceededOnFetchError) {
         logger.warn({ cep: cleanCep }, 'Operation timed out. Bubbling up.')
         throw error
       }

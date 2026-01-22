@@ -17,7 +17,14 @@ export function createRedisCacheConnection() {
   })
 
   redis.on('error', (error) => {
-    logger.error({ error }, '❌ Redis cache connection error')
+    logger.error(
+      {
+        message: error?.message,
+        stack: error?.stack,
+        name: error?.name,
+      },
+      '❌ Redis cache connection error',
+    )
   })
 
   return redis

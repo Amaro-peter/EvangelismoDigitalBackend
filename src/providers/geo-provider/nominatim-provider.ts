@@ -6,6 +6,8 @@ import { createHttpClient } from '@lib/http/axios'
 import { logger } from '@lib/logger'
 import { EnumProviderConfig, RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
 import { PrecisionHelper } from 'providers/helpers/precision-helper'
+import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
+import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
 
 export interface NominatimConfig {
   apiUrl: string
@@ -100,7 +102,7 @@ export class NominatimGeoProvider implements GeocodingProvider {
       }
     } catch (error) {
       if (signal?.aborted) {
-        throw signal.reason
+        throw new TimeoutExceededOnFetchError(signal.reason)
       }
 
       const err = error as AxiosError
@@ -118,8 +120,16 @@ export class NominatimGeoProvider implements GeocodingProvider {
       }
 
       // Other errors (network, 500, etc.) - throw as system errors
-      logger.warn({ error: err.message, status }, 'Nominatim Provider Failed')
-      throw error
+      logger.warn(
+        {
+          code: err.code,
+          name: err.name,
+          url: err.config?.url,
+          method: err.config?.method,
+        },
+        'Nominatim Provider Failed',
+      )
+      throw new GeoProviderFailureError()
     }
   }
 

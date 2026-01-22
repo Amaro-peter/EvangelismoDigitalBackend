@@ -6,6 +6,8 @@ import { EnumProviderConfig, RedisRateLimiter } from '@lib/redis/helper/rate-lim
 import { AddressServiceBusyError } from '@use-cases/errors/address-service-busy-error'
 import { PrecisionHelper } from 'providers/helpers/precision-helper'
 import Redis from 'ioredis'
+import { AddressProviderFailureError } from './error/address-provider-failure-error'
+import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
 
 export interface AwesomeApiConfig {
   apiUrl: string
@@ -113,7 +115,7 @@ export class AwesomeApiProvider implements AddressProvider {
         }
       } catch (error) {
         if (signal?.aborted) {
-          throw signal.reason
+          throw new TimeoutExceededOnFetchError(signal.reason)
         }
 
         if (error instanceof AddressServiceBusyError) {
@@ -134,10 +136,18 @@ export class AwesomeApiProvider implements AddressProvider {
 
         if (!isRetryable || attempt === this.MAX_RETRIES) {
           logger.error(
-            { cep: cleanCep, attempt, status, error: err.message },
+            {
+              cep: cleanCep,
+              attempt,
+              status,
+              code: err.code,
+              name: err.name,
+              url: err.config?.url,
+              method: err.config?.method,
+            },
             'Falha ao buscar endereço AwesomeAPI após tentativas',
           )
-          throw error
+          throw new AddressProviderFailureError()
         }
 
         // Backoff and retry for transient errors
@@ -149,7 +159,7 @@ export class AwesomeApiProvider implements AddressProvider {
 
     // This should be unreachable due to retry logic, but as safety net
     logger.error({ cep: cleanCep }, 'AwesomeAPI: Unexpected code path - all retries exhausted without throw')
-    throw new Error('Unexpected error in AwesomeApiProvider')
+    throw new AddressProviderFailureError()
   }
 
   private sleep(ms: number): Promise<void> {

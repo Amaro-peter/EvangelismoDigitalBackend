@@ -6,6 +6,7 @@ import { ResilientCache, ResilientCacheOptions, CachedFailureError } from '@lib/
 import { NoGeoProviderError } from './error/no-geo-provider-error'
 import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
 import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-found-error'
+import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
 
 export class ResilientGeoProvider implements GeocodingProvider {
   private readonly cacheManager: ResilientCache
@@ -130,7 +131,7 @@ export class ResilientGeoProvider implements GeocodingProvider {
 
       // Defensive Check: Stop immediately if timeout/abort fired
       if (signal.aborted) {
-        throw signal.reason
+        throw new TimeoutExceededOnFetchError(signal.reason)
       }
 
       try {
@@ -145,8 +146,8 @@ export class ResilientGeoProvider implements GeocodingProvider {
         notFoundCount++
         logger.info({ provider: providerName }, 'Provedor retornou null (não encontrado) - tentando próximo')
       } catch (error) {
-        if (signal.aborted) {
-          throw signal.reason
+        if (error instanceof TimeoutExceededOnFetchError) {
+          throw error
         }
 
         if (error instanceof CoordinatesNotFoundError) {
@@ -186,7 +187,7 @@ export class ResilientGeoProvider implements GeocodingProvider {
         { lastError, provider: lastProviderName },
         'Geocodificação falhou com erros de sistema (não cacheando)',
       )
-      throw lastError || new GeoProviderFailureError()
+      throw new GeoProviderFailureError(lastError)
     }
 
     // All providers returned null or 404 (no system errors)

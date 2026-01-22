@@ -5,8 +5,10 @@ import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { createHttpClient } from '@lib/http/axios'
 import { logger } from '@lib/logger'
 import { EnumProviderConfig, RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
-import { LocationIqProviderError } from './error/location-iq-error'
 import { PrecisionHelper } from 'providers/helpers/precision-helper'
+import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
+import { LocationIqProviderError } from './error/location-iq-error'
+import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
 
 export interface LocationIqConfig {
   apiUrl: string
@@ -113,7 +115,9 @@ export class LocationIqProvider implements GeocodingProvider {
           precision: PrecisionHelper.fromOsm(bestMatch),
         }
       } catch (error) {
-        if (signal?.aborted) throw signal.reason
+        if (signal?.aborted) {
+          throw new TimeoutExceededOnFetchError(signal.reason)
+        }
 
         // Se o erro foi o nosso BusyError (lançado acima), repassa imediatamente
         if (error instanceof GeoServiceBusyError) {
@@ -131,11 +135,19 @@ export class LocationIqProvider implements GeocodingProvider {
         // Store last error for potential re-throw
         lastError = error
 
-        const isRetryable = !err.response || (status && status >= 500) || status === 429
+        const isRetryable = !err.response || (status && (status >= 500 || status === 429))
 
         if (!isRetryable || attempt === this.MAX_ATTEMPTS) {
-          logger.warn({ error: err.message, status, attempt }, 'LocationIQ Provider Failed')
-          throw err
+          logger.warn(
+            {
+              code: err.code,
+              name: err.name,
+              url: err.config?.url,
+              method: err.config?.method,
+            },
+            'LocationIQ Provider Failed',
+          )
+          throw new GeoProviderFailureError()
         }
 
         // Backoff apenas para erros de rede/servidor instável
@@ -145,8 +157,8 @@ export class LocationIqProvider implements GeocodingProvider {
     }
 
     // This should be unreachable, but as a safety net, throw last error or generic error
-    logger.error({ lastError }, 'LocationIQ: Unexpected code path - all attempts exhausted without throw')
-    throw lastError || new LocationIqProviderError()
+    //logger.error({ lastError }, 'LocationIQ: Unexpected code path - all attempts exhausted without throw')
+    throw new GeoProviderFailureError()
   }
 
   private sleep(ms: number): Promise<void> {

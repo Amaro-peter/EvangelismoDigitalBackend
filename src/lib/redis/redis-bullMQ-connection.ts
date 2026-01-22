@@ -22,7 +22,14 @@ export function attachRedisLogger(redis: Redis) {
     logger.info('🔗 Redis connection established')
   })
   redis.on('error', (error) => {
-    logger.error({ error }, '❌ Redis connection error')
+    logger.error(
+      {
+        message: error?.message,
+        stack: error?.stack,
+        name: error?.name,
+      },
+      '❌ Redis connection error',
+    )
   })
   redis.on('ready', () => {
     logger.info('✅ Redis is ready to accept commands')

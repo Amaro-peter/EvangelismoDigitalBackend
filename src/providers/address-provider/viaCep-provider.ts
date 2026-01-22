@@ -6,7 +6,8 @@ import { EnumProviderConfig, RedisRateLimiter } from '@lib/redis/helper/rate-lim
 import { AddressServiceBusyError } from '@use-cases/errors/address-service-busy-error'
 import { PrecisionHelper } from 'providers/helpers/precision-helper'
 import Redis from 'ioredis'
-// [1] Importe o Helper
+import { AddressProviderFailureError } from './error/address-provider-failure-error'
+import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
 
 export interface ViaCepConfig {
   apiUrl: string
@@ -34,8 +35,8 @@ export class ViaCepProvider implements AddressProvider {
   // RATE_LIMIT_WINDOW = 1
 
   private readonly MAX_RETRIES = 2
-  private readonly BACKOFF_MS = 100
-  private readonly VIACEP_TIMEOUT = 1500
+  private readonly BACKOFF_MS = 200
+  private readonly VIACEP_TIMEOUT = 3000
 
   // HTTPS Agent Settings
   private readonly KEEP_ALIVE_MSECS = 1000
@@ -101,7 +102,7 @@ export class ViaCepProvider implements AddressProvider {
         }
       } catch (error) {
         if (signal?.aborted) {
-          throw signal.reason
+          throw new TimeoutExceededOnFetchError(signal.reason)
         }
 
         // Se for erro de Rate Limit, propaga
@@ -123,21 +124,42 @@ export class ViaCepProvider implements AddressProvider {
 
         if (!isRetryable || attempt === this.MAX_RETRIES) {
           logger.error(
-            { cep: cleanCep, attempt, status, error: err.message },
+            {
+              cep: cleanCep,
+              attempt,
+              status,
+              code: err.code,
+              name: err.name,
+              url: err.config?.url,
+              method: err.config?.method,
+            },
             'Falha ao buscar endereço após tentativas (ViaCEP)',
           )
-          throw error
+
+          throw new AddressProviderFailureError()
         }
 
         const delay = this.BACKOFF_MS * Math.pow(2, attempt - 1)
-        logger.warn({ cep: cleanCep, attempt, delay, status }, 'Repetindo solicitação para ViaCEP')
+        logger.warn(
+          {
+            cep: cleanCep,
+            attempt,
+            delay,
+            status,
+            code: err.code,
+            name: err.name,
+            url: err.config?.url,
+            method: err.config?.method,
+          },
+          'Repetindo solicitação para ViaCEP',
+        )
 
         await this.sleep(delay)
       }
     }
 
     logger.error({ cep: cleanCep }, 'ViaCEP: Unexpected code path - all retries exhausted without throw')
-    throw new Error('Unexpected error in ViaCepProvider')
+    throw new AddressProviderFailureError()
   }
 
   private sleep(ms: number): Promise<void> {

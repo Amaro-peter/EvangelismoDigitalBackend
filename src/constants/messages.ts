@@ -30,7 +30,7 @@ export const messages = {
     createUserFailed: 'Falha ao criar o usuário.',
     geoProviderFailureError: `Não foi possível localizar igrejas próximas agora. Verifique o CEP ou tente novamente mais tarde. Estamos trabalhando para normalizar o serviço.`,
     serviceOverloadError: 'Serviço sobrecarregado - tente novamente mais tarde',
-    timeoutExceedOnFetch: 'Tempo limite excedido ao buscar dados externo.',
+    timeoutExceededOnFetch: 'Tempo limite excedido ao buscar dados externo.',
     noGeoProviderError:
       'Provedor resiliente de geolocalização requer pelo menos um provedor de geolocalização configurado.',
     noAddressProviderError: 'Provedor resiliente de endereço requer pelo menos um provedor de endereço configurado.',
@@ -40,6 +40,7 @@ export const messages = {
     viaCepProviderError: 'Erro ao comunicar com o provedor ViaCep.',
     cepToLatLonError:
       'Não foi possível localizar igrejas próximas agora. Verifique o CEP ou tente novamente mais tarde. Estamos trabalhando para normalizar o serviço.',
+    noRateLimiterSetError: 'Nenhum rate limiter foi configurado para este provedor.',
   },
   info: {
     passwordResetGeneric: 'Se o usuário existir, você receberá um e-mail com instruções para redefinir a senha.',

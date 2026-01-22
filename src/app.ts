@@ -15,7 +15,7 @@ import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-found-error'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { AddressServiceBusyError } from '@use-cases/errors/address-service-busy-error'
-import { TimeoutExceedOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
+import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
 import { ServiceOverloadError } from '@lib/redis/errors/service-overload-error'
 
 z.config(z.locales.pt())
@@ -142,7 +142,7 @@ app.setErrorHandler((error, _request, reply) => {
     return reply.status(429).send({ message: error.message })
   }
 
-  if (error instanceof TimeoutExceedOnFetchError) {
+  if (error instanceof TimeoutExceededOnFetchError) {
     return reply.status(504).send({ message: error.message })
   }
 
