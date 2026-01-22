@@ -104,6 +104,7 @@ export class BrasilApiProvider implements AddressProvider {
         return {
           ...normalizedData,
           precision: precision,
+          providerName: 'BrasilAPI',
         }
       } catch (error) {
         // Tratamento de Abort/Timeout

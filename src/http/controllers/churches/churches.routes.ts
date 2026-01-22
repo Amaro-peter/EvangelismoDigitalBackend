@@ -17,41 +17,6 @@ export async function churchesRoutes(app: FastifyInstance) {
           timeWindow: '1 minute',
         },
       },
-      schema: {
-        querystring: {
-          type: 'object',
-          properties: {
-            cep: { type: 'string' },
-          },
-          required: ['cep'],
-        },
-        description: 'Busca as 20 igrejas mais próximas de uma coordenada',
-        tags: ['churches'],
-        response: {
-          200: {
-            description: 'Lista de igrejas mais próximas',
-            type: 'object',
-            properties: {
-              churches: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    publicId: { type: 'string' },
-                    name: { type: 'string' },
-                    address: { type: ['string', 'null'] },
-                    lat: { type: 'number' },
-                    lon: { type: 'number' },
-                    distanceKm: { type: 'number' },
-                    distanceMeters: { type: 'number' },
-                  },
-                },
-              },
-              totalFound: { type: 'number' },
-            },
-          },
-        },
-      },
     },
     findNearestChurches,
   )

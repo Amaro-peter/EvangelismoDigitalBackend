@@ -8,6 +8,7 @@ export interface AddressData {
   lat?: number
   lon?: number
   precision?: GeoPrecision
+  providerName?: string
 }
 
 export interface AddressProvider {

@@ -113,6 +113,7 @@ export class LocationIqProvider implements GeocodingProvider {
           lat: parseFloat(bestMatch.lat),
           lon: parseFloat(bestMatch.lon),
           precision: PrecisionHelper.fromOsm(bestMatch),
+          providerName: 'LocationIQ',
         }
       } catch (error) {
         if (signal?.aborted) {

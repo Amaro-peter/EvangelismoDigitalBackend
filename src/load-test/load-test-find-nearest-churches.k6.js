@@ -10,20 +10,20 @@ const successRate = new Rate('success_rate')
 const cacheHitTrend = new Trend('cache_hit_duration')
 const coldPathTrend = new Trend('cold_path_duration')
 
-// ===============================
-// ⚙️ Configuração dos cenários
-// ===============================
+// [ATUALIZADO] Lista completa de contadores
+const countAwesomeApi = new Counter('provider_awesome_api') // <--- Faltava este
+const countLocationIq = new Counter('provider_location_iq')
+const countNominatim = new Counter('provider_nominatim')
+const countOtherProvider = new Counter('provider_other')
+
 export const options = {
   scenarios: {
-    // CENÁRIO 1: Teste de Cache (CEP fixo)
     cache_stability: {
       executor: 'constant-vus',
       vus: 50,
       duration: '30s',
       exec: 'cacheTest',
     },
-
-    // CENÁRIO 2: Teste de Rate Limit (CEPs reais e únicos)
     provider_stress: {
       executor: 'ramping-arrival-rate',
       startRate: 5,
@@ -32,111 +32,109 @@ export const options = {
       maxVUs: 100,
       startTime: '35s',
       stages: [
-        { target: 10, duration: '3m' },  // Subida suave
-        { target: 14, duration: '3m' },  // Próximo ao limite
-        { target: 16, duration: '3m' }, // Estourando limite (espera-se 429/503)
-        { target: 0, duration: '30s' },  // Resfriamento
+        { target: 11, duration: '3m' },
+        { target: 13, duration: '3m' },
+        { target: 16, duration: '3m' },
+        { target: 0, duration: '1m' },
       ],
       exec: 'rateLimitTest',
     },
   },
-
   thresholds: {
     'cache_hit_duration': ['p(95)<50'],
     'cold_path_duration': ['p(95)<5000'],
-    // Aceitamos erros controlados (429/503), mas não erros de servidor (500)
     'http_req_failed{status:500}': ['rate==0'],
   },
 }
 
-// ===============================
-// 🌍 Configurações gerais
-// ===============================
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:3333'
 const ENDPOINT = '/churches/nearest'
 
-// ===============================
-// 📦 Carregamento dos CEPs reais
-// ===============================
 let VALID_CEPS = []
 try {
-  // Tenta carregar o arquivo se existir
   VALID_CEPS = JSON.parse(open('./fixtures/valid_ceps.json'))
 } catch (e) {
-  // Fallback para testes rápidos
-  VALID_CEPS = ['01001000', '20040002', '30140071', '40020000', '50010000', '70040010', '80020000']
+  VALID_CEPS = ['01001000', '20040002', '30140071', '40020000', '50010000']
 }
 
 if (!Array.isArray(VALID_CEPS) || VALID_CEPS.length === 0) {
   VALID_CEPS = ['01001000']
 }
 
-// ===============================
-// 🎯 Utilitário: CEP aleatório real
-// ===============================
 function getRandomValidCep() {
   const index = Math.floor(Math.random() * VALID_CEPS.length)
   return VALID_CEPS[index]
 }
 
-// ===============================
-// 🧪 CENÁRIO 1 — Cache Hit
-// ===============================
+// [ATUALIZADO] Função de rastreamento mais robusta
+function trackProvider(res) {
+  if (res.status !== 200) return
+
+  try {
+    const body = res.json()
+    // Normaliza para lowercase para evitar erros de case (Ex: "AwesomeApiProvider" vs "AwesomeAPI")
+    const providerRaw = body.providerName || ''
+    const provider = typeof providerRaw === 'string' ? providerRaw.toLowerCase() : ''
+
+    if (provider.includes('awesome')) {
+      countAwesomeApi.add(1)
+    } else if (provider.includes('location')) {
+      countLocationIq.add(1)
+    } else if (provider.includes('nominatim')) {
+      countNominatim.add(1)
+    } else {
+      // Se cair aqui, é um nome novo que não mapeamos
+      countOtherProvider.add(1)
+      console.log(`Provider não reconhecido: ${providerRaw}`)
+    }
+  } catch (e) {
+    // Ignora erro de parse
+  }
+}
+
 export function cacheTest() {
   const cep = '01001-000'
   const res = http.get(`${BASE_URL}${ENDPOINT}?cep=${cep}`)
 
-  const isSuccess = check(res, {
+  check(res, {
     'status is 200 (cache)': (r) => r.status === 200,
-    // Validação estrita para o Cache Hit
     'cache payload is valid': (r) => {
         const body = r.json();
         return Array.isArray(body.churches) && body.totalFound === 10;
     },
   })
 
-  if (isSuccess) {
+  if (res.status === 200) {
     successRate.add(1)
     cacheHitTrend.add(res.timings.duration)
+    trackProvider(res)
   } else {
     successRate.add(0)
   }
-
   sleep(0.5)
 }
 
-// ===============================
-// 🚦 CENÁRIO 2 — Rate Limit / Cold Path
-// ===============================
 export function rateLimitTest() {
   const cep = getRandomValidCep()
   const res = http.get(`${BASE_URL}${ENDPOINT}?cep=${cep}`)
 
-  // Métricas: Consideramos sucesso se a API respondeu 200 OU se defendeu (429/503)
   if (res.status === 429 || res.status === 503) {
     rateLimitErrors.add(1)
   } else if (res.status === 200) {
     successRate.add(1)
     coldPathTrend.add(res.timings.duration)
+    trackProvider(res)
   } else if (res.status === 404 || res.status === 400) {
-    // 404 é um fluxo válido de negócio (CEP não existe)
     successRate.add(1)
   }
 
-  // Asserções
   check(res, {
-    // Verifica se o status HTTP é um dos esperados
     'status handled correctly': (r) => 
       [200, 400, 404, 429, 503].includes(r.status),
     
-    // Verifica conteúdo APENAS se for sucesso (200)
-    // Se for 429/503, ignoramos essa checagem (retorna true)
     'valid churches array & totalFound=10 (if 200)': (r) => {
       if (r.status !== 200) return true
-      
       const body = r.json()
-      // AQUI: A validação que você pediu
-      // Verifica se existe o array 'churches' E se 'totalFound' é exatamente 10
       return Array.isArray(body.churches) && body.totalFound === 10
     },
   })

@@ -9,6 +9,7 @@ export interface GeoCoordinates {
   lat: number
   lon: number
   precision: GeoPrecision
+  providerName?: string
 }
 
 export interface GeoSearchOptions {

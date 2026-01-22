@@ -112,6 +112,7 @@ export class AwesomeApiProvider implements AddressProvider {
           lat: parseFloat(data.lat),
           lon: parseFloat(data.lng),
           precision: precision,
+          providerName: 'AwesomeAPI',
         }
       } catch (error) {
         if (signal?.aborted) {

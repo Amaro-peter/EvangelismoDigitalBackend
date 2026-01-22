@@ -99,6 +99,7 @@ export class ViaCepProvider implements AddressProvider {
           localidade: data.localidade,
           uf: data.uf,
           precision: precision,
+          providerName: 'ViaCEP',
         }
       } catch (error) {
         if (signal?.aborted) {

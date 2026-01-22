@@ -31,7 +31,7 @@ export async function findNearestChurches(
     }
 
     const cepToLatLonUseCase = makeCepToLatLonUseCase()
-    const { userLat, userLon, precision } = await cepToLatLonUseCase.execute({ cep })
+    const { userLat, userLon, precision, providerName } = await cepToLatLonUseCase.execute({ cep })
 
     if (process.env.NODE_ENV !== 'production' || Math.random() < 0.1) {
       logger.info({
@@ -57,7 +57,7 @@ export async function findNearestChurches(
 
     const sanitizedChurches = ChurchPresenter.toHTTP(churches)
 
-    return reply.status(200).send({ churches: sanitizedChurches, totalFound, precision })
+    return reply.status(200).send({ churches: sanitizedChurches, totalFound, precision, providerName })
   } catch (error) {
     // 1. Erros de Negócio (Bad Request - 400)
     if (error instanceof LatitudeRangeError || error instanceof LongitudeRangeError) {

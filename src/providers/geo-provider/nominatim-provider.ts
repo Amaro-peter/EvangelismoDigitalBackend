@@ -99,6 +99,7 @@ export class NominatimGeoProvider implements GeocodingProvider {
         lat: parseFloat(bestMatch.lat),
         lon: parseFloat(bestMatch.lon),
         precision: PrecisionHelper.fromOsm(bestMatch),
+        providerName: 'Nominatim',
       }
     } catch (error) {
       if (signal?.aborted) {
