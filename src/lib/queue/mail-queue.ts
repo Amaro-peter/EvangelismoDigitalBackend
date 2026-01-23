@@ -1,4 +1,5 @@
 import { logger } from '@lib/logger'
+import { redisQueue } from '@lib/redis/clients'
 import { createRedisBullMQConnection, attachRedisLogger } from '@lib/redis/redis-bullMQ-connection'
 import { Queue } from 'bullmq'
 
@@ -12,7 +13,7 @@ export interface MailJobData {
   context?: Record<string, unknown>
 }
 
-const redisForQueue = createRedisBullMQConnection()
+const redisForQueue = redisQueue
 attachRedisLogger(redisForQueue)
 
 export const mailQueue = new Queue<MailJobData>(MAIL_QUEUE_NAME, {

@@ -6,19 +6,14 @@ import { NominatimGeoProvider } from 'providers/geo-provider/nominatim-provider'
 import { LocationIqProvider } from 'providers/geo-provider/location-iq-provider'
 import { ResilientGeoProvider } from 'providers/geo-provider/resilient-geo-provider'
 import { env } from '@env/index'
-import { createRedisCacheConnection } from '@lib/redis/redis-cache-connection'
-import { createRedisRateLimiterConnection } from '@lib/redis/redis-rate-limiter-connection'
 import { BrasilApiProvider } from 'providers/address-provider/brasil-api-provider'
-
-const cacheConnection = createRedisCacheConnection()
-
-const rateLimitConnection = createRedisRateLimiterConnection()
+import { redisCache, redisRateLimit } from '@lib/redis/clients'
 
 let cachedUseCase: CepToLatLonUseCase | null = null
 
 export function makeCepToLatLonUseCase(
-  redisCacheConnection = cacheConnection,
-  redisRateLimitConnection = rateLimitConnection,
+  redisCacheConnection = redisCache,
+  redisRateLimitConnection = redisRateLimit,
 ): CepToLatLonUseCase {
   if (cachedUseCase) {
     return cachedUseCase

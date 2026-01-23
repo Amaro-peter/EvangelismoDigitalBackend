@@ -32,9 +32,9 @@ export const options = {
       maxVUs: 100,
       startTime: '35s',
       stages: [
+        { target: 7, duration: '3m' },
+        { target: 9, duration: '3m' },
         { target: 11, duration: '3m' },
-        { target: 13, duration: '3m' },
-        { target: 16, duration: '3m' },
         { target: 0, duration: '1m' },
       ],
       exec: 'rateLimitTest',
