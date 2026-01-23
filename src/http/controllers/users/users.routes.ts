@@ -16,7 +16,7 @@ import { searchUsersController } from './search-users.controller'
 
 export async function usersRoutes(app: FastifyInstance) {
   await app.register(rateLimit, {
-    global: false,
+    global: true,
     max: 2000,
     timeWindow: '1 minute',
   })

@@ -1,71 +1,166 @@
-import axios, { AxiosError, AxiosInstance } from 'axios'
-import https from 'https'
+import { AxiosError, AxiosInstance } from 'axios'
 import { AddressData, AddressProvider } from './address-provider.interface'
-import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 import { logger } from '@lib/logger'
+import { createHttpClient } from '@lib/http/axios'
+import { EnumProviderConfig, RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
+import { AddressServiceBusyError } from '@use-cases/errors/address-service-busy-error'
+import { PrecisionHelper } from 'providers/helpers/precision-helper'
+import Redis from 'ioredis'
+import { AddressProviderFailureError } from './error/address-provider-failure-error'
+import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
+
+export interface ViaCepConfig {
+  apiUrl: string
+}
+
+interface ViaCepResponse {
+  cep: string
+  logradouro: string
+  complemento: string
+  bairro: string
+  localidade: string
+  uf: string
+  ibge: string
+  gia: string
+  ddd: string
+  siafi: string
+  erro?: boolean
+}
 
 export class ViaCepProvider implements AddressProvider {
   private static api: AxiosInstance
+
+  // Configuração Fail-Fast in RedisRateLimiter: 5 requisições por segundo
+  // RATE_LIMIT_MAX = 5
+  // RATE_LIMIT_WINDOW = 1
+
   private readonly MAX_RETRIES = 2
-  private readonly BACKOFF_MS = 300
+  private readonly BACKOFF_MS = 200
   private readonly VIACEP_TIMEOUT = 3000
-  private readonly KEEP_ALIVE = true
+
+  // HTTPS Agent Settings
   private readonly KEEP_ALIVE_MSECS = 1000
-  private readonly MAX_SOCKETS = 2
-  private readonly MAX_FREE_SOCKETS = 2
+  private readonly MAX_SOCKETS = 100
+  private readonly MAX_FREE_SOCKETS = 10
   private readonly HTTPS_AGENT_TIMEOUT = 60000
 
-  constructor() {
+  constructor(
+    private readonly config: ViaCepConfig,
+    private readonly redisRateLimiterConnection: Redis,
+  ) {
     if (!ViaCepProvider.api) {
-      const httpsAgent = new https.Agent({
-        keepAlive: this.KEEP_ALIVE,
-        keepAliveMsecs: this.KEEP_ALIVE_MSECS,
-        maxSockets: this.MAX_SOCKETS,
-        maxFreeSockets: this.MAX_FREE_SOCKETS,
-        timeout: this.HTTPS_AGENT_TIMEOUT,
-      })
-
-      ViaCepProvider.api = axios.create({
-        baseURL: process.env.VIACEP_API_URL,
+      ViaCepProvider.api = createHttpClient({
+        baseURL: this.config.apiUrl,
         timeout: this.VIACEP_TIMEOUT,
         headers: {
-          'User-Agent': 'EvangelismoDigitalBackend/1.0 (contact@findhope.digital)',
+          'User-Agent': 'EvangelismoDigitalBackend/1.0',
         },
-        httpsAgent,
+        agentOptions: {
+          keepAliveMsecs: this.KEEP_ALIVE_MSECS,
+          maxSockets: this.MAX_SOCKETS,
+          maxFreeSockets: this.MAX_FREE_SOCKETS,
+          timeout: this.HTTPS_AGENT_TIMEOUT,
+        },
       })
     }
   }
 
-  async fetchAddress(cep: string): Promise<AddressData> {
-    for (let attempt = 0; attempt <= this.MAX_RETRIES; attempt++) {
-      try {
-        const response = await ViaCepProvider.api.get(`/${cep}/json/`)
+  async fetchAddress(cep: string, signal?: AbortSignal): Promise<AddressData | null> {
+    const cleanCep = cep.replace(/\D/g, '')
 
-        if (response.data?.erro) {
-          logger.warn({ cep, attempt }, 'CEP inválido retornado pela API ViaCEP')
-          throw new InvalidCepError()
+    // Fail-Fast Rate Limit Check
+    const rateLimiter = RedisRateLimiter.getInstance(this.redisRateLimiterConnection)
+
+    const allowed = await rateLimiter.tryConsume(EnumProviderConfig.VIACEP_ADDRESS)
+
+    if (!allowed) {
+      throw new AddressServiceBusyError('ViaCEP (Rate Limit Exceeded)')
+    }
+
+    for (let attempt = 1; attempt <= this.MAX_RETRIES; attempt++) {
+      if (signal?.aborted) {
+        throw signal.reason
+      }
+
+      try {
+        const { data } = await ViaCepProvider.api.get<ViaCepResponse>(`/${cleanCep}/json`, {
+          signal,
+        })
+
+        if (!data || data.erro) {
+          return null
         }
 
-        const { logradouro, bairro, localidade, uf } = response.data
-        logger.info({ cep, attempt }, 'Endereço obtido com sucesso da API ViaCEP')
-        return { logradouro, bairro, localidade, uf }
-      } catch (error) {
-        const err = error as AxiosError
-        const status = err.response?.status
-        const isRetryable = !err.response || (typeof status === 'number' && (status >= 500 || status === 429))
+        const precision = PrecisionHelper.fromAddressData(data)
 
-        if (!isRetryable || attempt === this.MAX_RETRIES) {
-          logger.error({ cep, attempt, status, error: err.message }, 'Falha ao buscar endereço após tentativas')
+        return {
+          logradouro: data.logradouro,
+          bairro: data.bairro,
+          localidade: data.localidade,
+          uf: data.uf,
+          precision: precision,
+          providerName: 'ViaCEP',
+        }
+      } catch (error) {
+        if (signal?.aborted) {
+          throw new TimeoutExceededOnFetchError(signal.reason)
+        }
+
+        // Se for erro de Rate Limit, propaga
+        if (error instanceof AddressServiceBusyError) {
           throw error
         }
 
-        const delay = this.BACKOFF_MS * Math.pow(2, attempt)
-        logger.warn({ cep, attempt, delay, status }, 'Repetindo solicitação para ViaCEP')
+        const err = error as AxiosError
+        const status = err.response?.status
+
+        // 404 (raro no ViaCEP, geralmente retorna 200 com erro: true, mas tratamos por segurança)
+        if (status === 404) {
+          logger.warn({ cep: cleanCep, attempt, status }, 'CEP não encontrado na ViaCEP (404)')
+          return null
+        }
+
+        // Retry logic para erros de rede, 500 ou 429
+        const isRetryable = !err.response || (typeof status === 'number' && (status >= 500 || status === 429))
+
+        if (!isRetryable || attempt === this.MAX_RETRIES) {
+          logger.error(
+            {
+              cep: cleanCep,
+              attempt,
+              status,
+              code: err.code,
+              name: err.name,
+              url: err.config?.url,
+              method: err.config?.method,
+            },
+            'Falha ao buscar endereço após tentativas (ViaCEP)',
+          )
+
+          throw new AddressProviderFailureError()
+        }
+
+        const delay = this.BACKOFF_MS * Math.pow(2, attempt - 1)
+        logger.warn(
+          {
+            cep: cleanCep,
+            attempt,
+            delay,
+            status,
+            code: err.code,
+            name: err.name,
+            url: err.config?.url,
+            method: err.config?.method,
+          },
+          'Repetindo solicitação para ViaCEP',
+        )
+
         await this.sleep(delay)
       }
     }
 
-    throw new Error('Unexpected error in fetchAddress')
+    logger.error({ cep: cleanCep }, 'ViaCEP: Unexpected code path - all retries exhausted without throw')
+    throw new AddressProviderFailureError()
   }
 
   private sleep(ms: number): Promise<void> {

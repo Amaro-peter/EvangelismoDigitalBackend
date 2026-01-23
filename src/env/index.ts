@@ -31,6 +31,20 @@ const envSchema = z.object({
 
   // ADMIN EMAIL
   ADMIN_EMAIL: z.email(),
+
+  // Address Providers
+  AWESOME_API_URL: z.string().url(), //Also geocoding provider
+  AWESOME_API_TOKEN: z.string().min(1),
+  VIACEP_API_URL: z.string().url(),
+  BRASIL_API_URL: z.string().url(),
+
+  // Geocoding Providers
+  // Nominatim (Fallback)
+  NOMINATIM_API_URL: z.string().url(),
+
+  // LocationIQ (Primary)
+  LOCATION_IQ_API_URL: z.string().url().default('https://us1.locationiq.com/v1'),
+  LOCATION_IQ_API_TOKEN: z.string().min(1),
 })
 
 const _env = envSchema.safeParse(process.env)

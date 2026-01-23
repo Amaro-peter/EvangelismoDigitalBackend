@@ -13,8 +13,6 @@ type AuthenticateUserUseCaseResponse = {
   user: User
 }
 
-const DUMMY_HASH = '$2a$12$tlPzU0pvKy33GEnCkOCipeNJC1Ho4NHro4XwveiXUM5xChZj3ua9y'
-
 export class AuthenticateUserUseCase {
   constructor(private usersRepository: UsersRepository) {}
 
@@ -31,7 +29,7 @@ export class AuthenticateUserUseCase {
       throw new InvalidCredentialsError()
     }
 
-    const hashToCompare = user?.passwordHash || DUMMY_HASH
+    const hashToCompare = user.passwordHash
 
     const doesPasswordMatch = await compare(password, hashToCompare)
 

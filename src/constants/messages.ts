@@ -1,5 +1,3 @@
-import { create } from 'axios'
-
 export const messages = {
   validation: {
     invalidData: 'Dados de registro inválidos!',
@@ -20,6 +18,7 @@ export const messages = {
     internalServer: 'Erro interno do servidor!',
     invalidCredentials: 'Credenciais inválidas!',
     resourceNotFound: 'Recurso não encontrado!',
+    cepDoesNotExist: 'O CEP fornecido não existe.',
     coordinatesNotFound: 'Coordenadas não encontradas para o endereço fornecido.',
     churchNotFound: 'Igreja não encontrada.',
     noAddressProvided: 'Nenhum endereço fornecido para conversão de CEP.',
@@ -30,6 +29,19 @@ export const messages = {
     formSubmissionFailed: 'Falha ao enviar o formulário.',
     createChurchFailed: 'Falha ao criar a igreja.',
     createUserFailed: 'Falha ao criar o usuário.',
+    geoProviderFailureError: `Não foi possível localizar igrejas próximas agora. Verifique o CEP ou tente novamente mais tarde. Estamos trabalhando para normalizar o serviço.`,
+    serviceOverloadError: 'Serviço sobrecarregado - tente novamente mais tarde',
+    timeoutExceededOnFetch: 'Tempo limite excedido ao buscar dados externo.',
+    noGeoProviderError:
+      'Provedor resiliente de geolocalização requer pelo menos um provedor de geolocalização configurado.',
+    noAddressProviderError: 'Provedor resiliente de endereço requer pelo menos um provedor de endereço configurado.',
+    operationAbortedError: 'Operação abortada pelo cache manager devido a timeout ou cancelamento.',
+    addressProviderFailureError: 'Falha ao obter o endereço a partir do provedor de endereços.',
+    locationIqProviderError: 'Erro ao comunicar com o provedor LocationIQ.',
+    viaCepProviderError: 'Erro ao comunicar com o provedor ViaCep.',
+    cepToLatLonError:
+      'Não foi possível localizar igrejas próximas agora. Verifique o CEP ou tente novamente mais tarde. Estamos trabalhando para normalizar o serviço.',
+    noRateLimiterSetError: 'Nenhum rate limiter foi configurado para este provedor.',
   },
   info: {
     passwordResetGeneric: 'Se o usuário existir, você receberá um e-mail com instruções para redefinir a senha.',

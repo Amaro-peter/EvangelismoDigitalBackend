@@ -1,155 +1,146 @@
-import axios, { AxiosError, AxiosInstance } from 'axios'
-import { GeocodingProvider, GeoCoordinates, GeoSearchOptions } from './geo-provider.interface'
-import https from 'https'
+import { AxiosError, AxiosInstance } from 'axios'
+import { Redis } from 'ioredis'
+import { GeocodingProvider, GeoCoordinates, GeoSearchOptions, GeoPrecision } from './geo-provider.interface'
+import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
+import { createHttpClient } from '@lib/http/axios'
 import { logger } from '@lib/logger'
+import { EnumProviderConfig, RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
+import { PrecisionHelper } from 'providers/helpers/precision-helper'
+import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
+import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
+
+export interface NominatimConfig {
+  apiUrl: string
+}
 
 type NominatimSearchParams = Record<string, string | number | undefined>
 
-type NominatimSearchItem = {
-  lat: string
-  lon: string
-}
-
-type NominatimSearchResponse = NominatimSearchItem[]
-
 export class NominatimGeoProvider implements GeocodingProvider {
   private static api: AxiosInstance
-  private readonly MAX_RETRIES = 2
-  private readonly BACKOFF_MS = 300
+
+  // Fail-Fast Configuration in RedisRateLimiter: 1 request per second max
+  // RATE_LIMIT_MAX = 1
+  // RATE_LIMIT_WINDOW = 1
+
+  // Nominatim API Timeout
   private readonly NOMINATIM_TIMEOUT = 4000
-  private readonly KEEP_ALIVE = true
+
+  // HTTPS Agent Settings
   private readonly KEEP_ALIVE_MSECS = 1000
-  private readonly MAX_SOCKETS = 1
-  private readonly MAX_FREE_SOCKETS = 1
+  private readonly MAX_SOCKETS = 100
+  private readonly MAX_FREE_SOCKETS = 10
   private readonly HTTPS_AGENT_TIMEOUT = 60000
 
-  constructor() {
+  constructor(
+    private readonly config: NominatimConfig,
+    private readonly redisRateLimiterConnection: Redis,
+  ) {
     if (!NominatimGeoProvider.api) {
-      const httpsAgent = new https.Agent({
-        keepAlive: this.KEEP_ALIVE,
-        keepAliveMsecs: this.KEEP_ALIVE_MSECS,
-        maxSockets: this.MAX_SOCKETS,
-        maxFreeSockets: this.MAX_FREE_SOCKETS,
-        timeout: this.HTTPS_AGENT_TIMEOUT,
-      })
-
-      NominatimGeoProvider.api = axios.create({
-        baseURL: process.env.GEOCODING_API_URL,
+      NominatimGeoProvider.api = createHttpClient({
+        baseURL: this.config.apiUrl,
         timeout: this.NOMINATIM_TIMEOUT,
         headers: {
           'User-Agent': 'EvangelismoDigitalBackend/1.0 (contact@findhope.digital)',
         },
-        httpsAgent,
+        agentOptions: {
+          keepAliveMsecs: this.KEEP_ALIVE_MSECS,
+          maxSockets: this.MAX_SOCKETS,
+          maxFreeSockets: this.MAX_FREE_SOCKETS,
+          timeout: this.HTTPS_AGENT_TIMEOUT,
+        },
       })
     }
   }
 
-  async search(query: string): Promise<GeoCoordinates | null> {
-    return this.performRequest({ q: query })
+  async search(query: string, signal?: AbortSignal): Promise<GeoCoordinates | null> {
+    return this.performRequest({ q: query, limit: 1, format: 'json' }, signal)
   }
 
-  async searchStructured(options: GeoSearchOptions): Promise<GeoCoordinates | null> {
-    return this.performRequest({
-      street: options.street,
-      neighborhood: options.neighborhood,
-      city: options.city,
-      state: options.state,
-      country: options.country,
-    })
+  async searchStructured(options: GeoSearchOptions, signal?: AbortSignal): Promise<GeoCoordinates | null> {
+    return this.performRequest(
+      {
+        street: options.street,
+        city: options.city,
+        state: options.state,
+        country: options.country,
+        limit: 1,
+        format: 'json',
+      },
+      signal,
+    )
+  }
+
+  private async performRequest(params: NominatimSearchParams, signal?: AbortSignal): Promise<GeoCoordinates | null> {
+    // 1. Fail-Fast Rate Limit Check
+    // If limit is exceeded, we throw immediately so ResilientGeoProvider switches to next provider.
+    const rateLimiter = RedisRateLimiter.getInstance(this.redisRateLimiterConnection)
+
+    const allowed = await rateLimiter.tryConsume(EnumProviderConfig.NOMINATIM_GEOCODING)
+
+    if (!allowed) {
+      throw new GeoServiceBusyError('Nominatim (Rate Limit Exceeded)')
+    }
+
+    try {
+      const cleanParams = this.cleanParams(params)
+
+      const response = await NominatimGeoProvider.api.get<any[]>('/search', {
+        params: cleanParams,
+        signal,
+      })
+
+      if (!response.data || response.data.length === 0) {
+        // Not found - return null so ResilientGeoProvider can try next provider
+        return null
+      }
+
+      const bestMatch = response.data[0]
+      return {
+        lat: parseFloat(bestMatch.lat),
+        lon: parseFloat(bestMatch.lon),
+        precision: PrecisionHelper.fromOsm(bestMatch),
+        providerName: 'Nominatim',
+      }
+    } catch (error) {
+      if (signal?.aborted) {
+        throw new TimeoutExceededOnFetchError(signal.reason)
+      }
+
+      const err = error as AxiosError
+      const status = err.response?.status
+
+      // 404 means not found - return null to try next provider
+      if (status === 404) {
+        return null
+      }
+
+      // API rate limit (429) - throw so ResilientGeoProvider tries next provider
+      if (status === 429) {
+        logger.warn('Nominatim Rate Limit Hit (429 from API)')
+        throw new GeoServiceBusyError('Nominatim (API Rate Limit)')
+      }
+
+      // Other errors (network, 500, etc.) - throw as system errors
+      logger.warn(
+        {
+          code: err.code,
+          name: err.name,
+          url: err.config?.url,
+          method: err.config?.method,
+        },
+        'Nominatim Provider Failed',
+      )
+      throw new GeoProviderFailureError()
+    }
   }
 
   private cleanParams(params: NominatimSearchParams): Record<string, string | number> {
     const cleaned: Record<string, string | number> = {}
     for (const [key, value] of Object.entries(params)) {
-      if (value === undefined) continue
-      if (typeof value === 'string' && value.trim().length === 0) continue
-      cleaned[key] = typeof value === 'string' ? value.trim() : value
+      if (value !== undefined && value !== null && value !== '') {
+        cleaned[key] = value
+      }
     }
     return cleaned
-  }
-
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms))
-  }
-
-  private parseRetryAfterMs(value: unknown): number | null {
-    if (typeof value !== 'string') return null
-
-    // Retry-After can be seconds or an HTTP date
-    const asSeconds = Number.parseInt(value, 10)
-    if (Number.isFinite(asSeconds) && asSeconds >= 0) return asSeconds * 1000
-
-    const asDate = Date.parse(value)
-    if (!Number.isNaN(asDate)) {
-      const delta = asDate - Date.now()
-      return delta > 0 ? delta : 0
-    }
-
-    return null
-  }
-
-  private computeDelayMs(attempt: number, err?: AxiosError): number {
-    // Base exponential backoff
-    const base = this.BACKOFF_MS * Math.pow(2, attempt)
-
-    // If throttled, prefer server guidance
-    if (err?.response?.status === 429) {
-      const retryAfter = this.parseRetryAfterMs(err.response.headers?.['retry-after'])
-      if (retryAfter !== null) {
-        return retryAfter
-      }
-    }
-
-    // Deterministic exponential backoff (no jitter since no workers)
-    return base
-  }
-
-  private async performRequest(params: NominatimSearchParams): Promise<GeoCoordinates | null> {
-    const finalParams = this.cleanParams({
-      ...params,
-      format: 'jsonv2',
-      limit: 1,
-    })
-
-    for (let attempt = 0; attempt <= this.MAX_RETRIES; attempt++) {
-      try {
-        const result = await NominatimGeoProvider.api.get<NominatimSearchResponse>('/search', {
-          params: finalParams,
-        })
-
-        const first = result.data?.[0]
-        if (!first) {
-          logger.info('Nenhum resultado encontrado na geocodificação')
-          return null
-        }
-
-        const lat = Number.parseFloat(first.lat)
-        const lon = Number.parseFloat(first.lon)
-
-        if (Number.isNaN(lat) || Number.isNaN(lon)) {
-          logger.warn('Coordenadas inválidas recebidas do Nominatim')
-          return null
-        }
-
-        logger.info({ lat, lon }, 'Geocodificação bem-sucedida')
-        return { lat, lon }
-      } catch (error) {
-        const err = error as AxiosError
-
-        const status = err.response?.status
-        const isRetryable = !err.response || (typeof status === 'number' && (status >= 500 || status === 429))
-
-        if (!isRetryable || attempt === this.MAX_RETRIES) {
-          logger.error({ attempt, status, error: err.message }, 'Falha na geocodificação após tentativas')
-          return null
-        }
-
-        const delay = this.computeDelayMs(attempt, err)
-        logger.warn({ attempt, delay, status }, 'Repetindo solicitação de geocodificação')
-        await this.sleep(delay)
-      }
-    }
-
-    return null
   }
 }

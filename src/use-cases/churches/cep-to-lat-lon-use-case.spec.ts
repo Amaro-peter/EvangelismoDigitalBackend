@@ -1,158 +1,300 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest'
 import { CepToLatLonUseCase } from './cep-to-lat-lon-use-case'
+import { AddressProvider } from 'providers/address-provider/address-provider.interface'
+import { GeocodingProvider, GeoPrecision, GeoCoordinates } from 'providers/geo-provider/geo-provider.interface'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-found-error'
-import axios from 'axios'
+import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
+import { CepToLatLonError } from '@use-cases/errors/cep-to-lat-lon-error'
+import { Redis } from 'ioredis'
+import { CachedFailureError } from '@lib/redis/helper/resilient-cache'
 
-vi.mock('axios')
+// --- 1. Mocks de Infraestrutura ---
+vi.mock('@lib/env', () => ({
+  env: {
+    NODE_ENV: 'test',
+    LOG_LEVEL: 'info',
+    // ... rest of env config
+    APP_NAME: 'Test',
+  },
+}))
+
+vi.mock('@lib/logger', () => ({
+  logger: {
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
+  },
+}))
+
+// --- 2. Mock do Redis e ResilientCache ---
+vi.mock('ioredis', () => {
+  return {
+    Redis: vi.fn(),
+  }
+})
+
+// === CRITICAL FIX: Global Mock Instance Holder ===
+// We use this to bridge the gap between the class mock and our test assertions
+const mockGetOrFetch = vi.fn()
+const mockGenerateKey = vi.fn()
+
+vi.mock('@lib/redis/helper/resilient-cache', () => {
+  return {
+    // Return a real class so 'new ResilientCache()' works
+    ResilientCache: class ResilientCacheMock {
+      constructor() {}
+      // Delegate calls to the global spy functions
+      getOrFetch(...args: any[]) {
+        return mockGetOrFetch(...args)
+      }
+      generateKey(...args: any[]) {
+        return mockGenerateKey(...args)
+      }
+    },
+    // We must expose the real or compatible Error class for 'instanceof' checks
+    CachedFailureError: class CachedFailureError extends Error {
+      errorType: string
+      errorData: any
+      constructor(type: string, message: string, data: any) {
+        super(message)
+        this.name = 'CachedFailureError'
+        this.errorType = type
+        this.errorData = data
+      }
+    },
+  }
+})
 
 describe('CepToLatLon Use Case', () => {
-  const mockedAxios = vi.mocked(axios, true)
+  let useCase: CepToLatLonUseCase
+  let addressProviderMock: { fetchAddress: Mock }
+  let geocodingProviderMock: { search: Mock; searchStructured: Mock }
+  let redisMock: Redis
+
+  const defaultOptions = {
+    prefix: 'test',
+    defaultTtlSeconds: 60,
+    negativeTtlSeconds: 10,
+  }
 
   beforeEach(() => {
     vi.clearAllMocks()
+
+    // Reset global spies manually since they are outside the beforeEach scope
+    mockGetOrFetch.mockReset()
+    mockGenerateKey.mockReset()
+
+    // Default Cache Behavior: Cache Miss (run the fetcher)
+    mockGetOrFetch.mockImplementation(async (_key, fetcher, _mapper) => {
+      return fetcher(new AbortController().signal)
+    })
+
+    mockGenerateKey.mockImplementation(({ cep }) => `cep:${cep}`)
+
+    // Setup Providers
+    addressProviderMock = { fetchAddress: vi.fn() }
+    geocodingProviderMock = { search: vi.fn(), searchStructured: vi.fn() }
+    redisMock = new Redis()
+
+    useCase = new CepToLatLonUseCase(
+      geocodingProviderMock as unknown as GeocodingProvider,
+      addressProviderMock as unknown as AddressProvider,
+      redisMock,
+      defaultOptions as any,
+    )
   })
 
-  afterEach(() => {
-    vi.clearAllMocks()
+  // ============================================================================
+  // SUCCESS SCENARIOS
+  // ============================================================================
+
+  it('should format CEP correctly and use generated cache key', async () => {
+    addressProviderMock.fetchAddress.mockResolvedValue({
+      lat: -23,
+      lon: -46,
+      precision: GeoPrecision.ROOFTOP,
+    })
+
+    await useCase.execute({ cep: '12.345-678' })
+
+    expect(mockGenerateKey).toHaveBeenCalledWith({ cep: '12345678' })
+    expect(addressProviderMock.fetchAddress).toHaveBeenCalledWith('12345678', expect.any(AbortSignal))
   })
 
-  it('should convert a valid CEP to latitude and longitude', async () => {
-    const useCase = new CepToLatLonUseCase()
-
-    mockedAxios.get.mockResolvedValueOnce({
-      data: {
-        logradouro: 'Avenida Paulista',
-        localidade: 'São Paulo',
-        uf: 'SP',
-      },
+  it('OPTIMIZATION: should return coordinates directly if AddressProvider returns them', async () => {
+    addressProviderMock.fetchAddress.mockResolvedValue({
+      logradouro: 'Av Paulista',
+      lat: -23.56,
+      lon: -46.65,
+      precision: GeoPrecision.ROOFTOP,
     })
 
-    mockedAxios.get.mockResolvedValueOnce({
-      data: [
-        {
-          lat: '-23.5631',
-          lon: '-46.6554',
-        },
-      ],
+    const result = await useCase.execute({ cep: '01310100' })
+
+    expect(result).toEqual({
+      userLat: -23.56,
+      userLon: -46.65,
+      precision: GeoPrecision.ROOFTOP,
     })
-
-    const { userLat, userLon } = await useCase.execute({ cep: '01310-100' })
-
-    expect(userLat).toBe(-23.5631)
-    expect(userLon).toBe(-46.6554)
-    expect(mockedAxios.get).toHaveBeenCalledTimes(2)
-    expect(mockedAxios.get).toHaveBeenCalledWith('https://viacep.com.br/ws/01310-100/json/')
+    expect(geocodingProviderMock.search).not.toHaveBeenCalled()
   })
 
-  it('should throw InvalidCepError when CEP is invalid', async () => {
-    const useCase = new CepToLatLonUseCase()
-
-    mockedAxios.get.mockResolvedValueOnce({
-      data: {
-        erro: true,
-      },
+  it('STRATEGY A: should find coordinates using exact address (Street + City)', async () => {
+    addressProviderMock.fetchAddress.mockResolvedValue({
+      logradouro: 'Avenida Paulista',
+      localidade: 'São Paulo',
+      uf: 'SP',
     })
 
-    await expect(() => useCase.execute({ cep: '00000-000' })).rejects.toBeInstanceOf(InvalidCepError)
+    geocodingProviderMock.search.mockResolvedValueOnce({
+      lat: -23.5631,
+      lon: -46.6554,
+      precision: GeoPrecision.ROOFTOP,
+    })
+
+    const result = await useCase.execute({ cep: '01310100' })
+
+    expect(geocodingProviderMock.search).toHaveBeenCalledWith(
+      'Avenida Paulista, São Paulo - SP, Brazil',
+      expect.any(AbortSignal),
+    )
+    expect(result.userLat).toBe(-23.5631)
   })
 
-  it('should throw CoordinatesNotFoundError when no coordinates are found', async () => {
-    const useCase = new CepToLatLonUseCase()
-
-    mockedAxios.get.mockResolvedValueOnce({
-      data: {
-        logradouro: 'Rua Inexistente',
-        localidade: 'Cidade Desconhecida',
-        uf: 'XX',
-      },
+  it('STRATEGY B: should fallback to neighborhood search if street search fails', async () => {
+    addressProviderMock.fetchAddress.mockResolvedValue({
+      logradouro: 'Rua Desconhecida',
+      bairro: 'Bela Vista',
+      localidade: 'São Paulo',
+      uf: 'SP',
     })
 
-    mockedAxios.get.mockResolvedValueOnce({
-      data: [],
-    })
+    geocodingProviderMock.search
+      .mockResolvedValueOnce(null) // Falha na Rua
+      .mockResolvedValueOnce({
+        // Sucesso no Bairro
+        lat: -23.1,
+        lon: -46.2,
+        precision: GeoPrecision.NEIGHBORHOOD,
+      })
 
-    await expect(() => useCase.execute({ cep: '12345-678' })).rejects.toBeInstanceOf(CoordinatesNotFoundError)
+    const result = await useCase.execute({ cep: '01310100' })
+
+    expect(result.precision).toBe(GeoPrecision.NEIGHBORHOOD)
+    expect(geocodingProviderMock.search).toHaveBeenCalledTimes(2)
   })
 
-  it('should throw CoordinatesNotFoundError when geocoding response is null', async () => {
-    const useCase = new CepToLatLonUseCase()
-
-    mockedAxios.get.mockResolvedValueOnce({
-      data: {
-        logradouro: 'Rua Teste',
-        localidade: 'São Paulo',
-        uf: 'SP',
-      },
+  it('STRATEGY C: should fallback to structured city search if street and neighborhood fail', async () => {
+    addressProviderMock.fetchAddress.mockResolvedValue({
+      logradouro: 'Rua X',
+      bairro: 'Bairro Y',
+      localidade: 'São Paulo',
+      uf: 'SP',
     })
 
-    mockedAxios.get.mockResolvedValueOnce({
-      data: null,
+    geocodingProviderMock.search.mockResolvedValue(null) // Falha rua e bairro
+    geocodingProviderMock.searchStructured.mockResolvedValueOnce({
+      lat: -23.55,
+      lon: -46.63,
+      precision: GeoPrecision.CITY,
     })
 
-    await expect(() => useCase.execute({ cep: '12345-678' })).rejects.toBeInstanceOf(CoordinatesNotFoundError)
+    const result = await useCase.execute({ cep: '01000000' })
+
+    expect(result.precision).toBe(GeoPrecision.CITY)
+    expect(geocodingProviderMock.searchStructured).toHaveBeenCalled()
   })
 
-  it('should call Nominatim API with correct parameters', async () => {
-    const useCase = new CepToLatLonUseCase()
+  // ============================================================================
+  // CACHE BEHAVIOR TESTS
+  // ============================================================================
 
-    mockedAxios.get.mockResolvedValueOnce({
-      data: {
-        logradouro: 'Avenida Atlântica',
-        localidade: 'Rio de Janeiro',
-        uf: 'RJ',
-      },
-    })
+  it('should return cached value immediately (Cache Hit)', async () => {
+    const cachedResponse = { userLat: 1, userLon: 1, precision: GeoPrecision.ROOFTOP }
+    mockGetOrFetch.mockResolvedValue(cachedResponse)
 
-    mockedAxios.get.mockResolvedValueOnce({
-      data: [
-        {
-          lat: '-22.9707',
-          lon: '-43.1824',
-        },
-      ],
-    })
+    const result = await useCase.execute({ cep: '00000000' })
 
-    await useCase.execute({ cep: '22010-000' })
-
-    expect(mockedAxios.get).toHaveBeenNthCalledWith(2, 'https://nominatim.openstreetmap.org/search', {
-      params: {
-        q: 'Avenida Atlântica, Rio de Janeiro - RJ, Brazil',
-        format: 'jsonv2',
-        limit: 1,
-        addressdetails: 1,
-      },
-      headers: {
-        'User-Agent': 'EvangelismoDigitalBackend/1.0 (contact@findhope.digital)',
-      },
-    })
+    expect(result).toBe(cachedResponse)
+    expect(addressProviderMock.fetchAddress).not.toHaveBeenCalled()
   })
 
-  it('should parse string latitude and longitude to numbers', async () => {
-    const useCase = new CepToLatLonUseCase()
+  it('should unwrap CachedFailureError back to InvalidCepError', async () => {
+    const cachedError = new CachedFailureError('InvalidCepError', 'Invalid CEP', { cep: '000' })
+    mockGetOrFetch.mockRejectedValue(cachedError)
 
-    mockedAxios.get.mockResolvedValueOnce({
-      data: {
-        logradouro: 'Rua Teste',
-        localidade: 'São Paulo',
-        uf: 'SP',
-      },
+    await expect(useCase.execute({ cep: '000' })).rejects.toThrow(InvalidCepError)
+  })
+
+  it('should unwrap CachedFailureError back to CoordinatesNotFoundError', async () => {
+    const cachedError = new CachedFailureError('CoordinatesNotFoundError', 'Not found', { cep: '000' })
+    mockGetOrFetch.mockRejectedValue(cachedError)
+
+    await expect(useCase.execute({ cep: '000' })).rejects.toThrow(CoordinatesNotFoundError)
+  })
+
+  it('should properly map domain errors to cacheable objects', async () => {
+    let capturedMapper: any
+    mockGetOrFetch.mockImplementation(async (_k, fetcher, mapper) => {
+      capturedMapper = mapper
+      return fetcher(new AbortController().signal)
     })
 
-    mockedAxios.get.mockResolvedValueOnce({
-      data: [
-        {
-          lat: '-23.5505',
-          lon: '-46.6333',
-        },
-      ],
+    addressProviderMock.fetchAddress.mockResolvedValue(null) // Gera InvalidCepError
+
+    try {
+      await useCase.execute({ cep: '00000000' })
+    } catch {
+      /* Ignora erro */
+    }
+
+    expect(capturedMapper).toBeDefined()
+
+    // Verifica se InvalidCepError retorna objeto de erro (será cacheado)
+    expect(capturedMapper(new InvalidCepError())).toEqual({
+      type: 'InvalidCepError',
+      message: expect.any(String),
+      data: expect.any(Object),
     })
 
-    const { userLat, userLon } = await useCase.execute({ cep: '01000-000' })
+    // Verifica se erro genérico retorna null (não será cacheado)
+    expect(capturedMapper(new Error('DB Error'))).toBeNull()
+  })
 
-    expect(typeof userLat).toBe('number')
-    expect(typeof userLon).toBe('number')
-    expect(userLat).toBe(-23.5505)
-    expect(userLon).toBe(-46.6333)
+  // ============================================================================
+  // ERROR HANDLING (NON-CACHED & SYSTEM ERRORS)
+  // ============================================================================
+
+  it('should throw InvalidCepError when provider returns null', async () => {
+    addressProviderMock.fetchAddress.mockResolvedValue(null)
+    await expect(useCase.execute({ cep: '00000000' })).rejects.toThrow(InvalidCepError)
+  })
+
+  it('should throw CoordinatesNotFoundError when all strategies fail', async () => {
+    addressProviderMock.fetchAddress.mockResolvedValue({ localidade: 'Oz', uf: 'WZ' })
+    geocodingProviderMock.search.mockResolvedValue(null)
+    geocodingProviderMock.searchStructured.mockResolvedValue(null)
+
+    await expect(useCase.execute({ cep: '00000000' })).rejects.toThrow(CoordinatesNotFoundError)
+  })
+
+  it('should bubble up GeoServiceBusyError (Rate Limit)', async () => {
+    addressProviderMock.fetchAddress.mockResolvedValue({ logradouro: 'Rua A', localidade: 'B', uf: 'C' })
+    geocodingProviderMock.search.mockRejectedValue(new GeoServiceBusyError('Nominatim'))
+
+    await expect(useCase.execute({ cep: '00000000' })).rejects.toThrow(GeoServiceBusyError)
+  })
+
+  it('should throw generic CepToLatLonError on unexpected system failure', async () => {
+    addressProviderMock.fetchAddress.mockRejectedValue(new Error('Unknown Axios Error'))
+    await expect(useCase.execute({ cep: '00000000' })).rejects.toThrow(CepToLatLonError)
+  })
+
+  it('should throw CepToLatLonError if cache returns null unexpectedly', async () => {
+    // Caso raro onde o cache retorna sucesso (s=true) mas sem valor
+    mockGetOrFetch.mockResolvedValue(null)
+    await expect(useCase.execute({ cep: '00000000' })).rejects.toThrow(CepToLatLonError)
   })
 })
