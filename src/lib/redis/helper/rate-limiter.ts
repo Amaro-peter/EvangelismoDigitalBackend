@@ -1,7 +1,7 @@
 import { RateLimiterRedis } from 'rate-limiter-flexible'
 import Redis from 'ioredis'
 import { logger } from '@lib/logger'
-import { NoRateLimiterSetError } from '../errors/NoRateLimiterSetError'
+import { NoRateLimiterSetError } from '../errors/noRateLimiterSetError'
 
 /**
  * DESIGN DECISION — Rate Limiting Strategy

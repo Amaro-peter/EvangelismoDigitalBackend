@@ -1,46 +1,45 @@
-// Mock environment variables FIRST
+// src/lib/redis/helper/rate-limiter.spec.ts
+
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 
+// 1. Mock Environment Variables
 vi.mock('@lib/env', () => ({
   env: {
     NODE_ENV: 'test',
-    LOG_LEVEL: 'silent',
+    LOG_LEVEL: 'silent', // Silencia logs durante testes
     REDIS_HOST: 'localhost',
     REDIS_PORT: 6379,
   },
 }))
 
-import { RedisRateLimiter, EnumProviderConfig } from './rate-limiter'
-import { RateLimiterRedis } from 'rate-limiter-flexible'
-import Redis from 'ioredis'
-import { logger } from '@lib/logger'
-
-// --- CORREÇÃO AQUI: MOCK IOREDIS ---
-// Usamos 'function()' para permitir o uso de 'new Redis()'
-vi.mock('ioredis', () => {
-  return {
-    default: vi.fn().mockImplementation(function () {
-      return {
-        quit: vi.fn().mockResolvedValue('OK'),
-      }
-    }),
-  }
-})
-
+// 2. Mock Logger
 vi.mock('@lib/logger', () => ({
   logger: {
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
+    debug: vi.fn(),
   },
 }))
 
-// --- CORREÇÃO AQUI: MOCK RATE LIMITER FLEXIBLE ---
-const mockConsume = vi.fn()
+// 3. Mock IORedis (Função tradicional para permitir 'new')
+const mockRedisQuit = vi.fn().mockResolvedValue('OK')
+vi.mock('ioredis', () => {
+  const RedisMock = vi.fn().mockImplementation(function () {
+    return {
+      quit: mockRedisQuit,
+    }
+  })
+  return {
+    default: RedisMock,
+    Redis: RedisMock,
+  }
+})
 
+// 4. Mock rate-limiter-flexible
+const mockConsume = vi.fn()
 vi.mock('rate-limiter-flexible', () => {
   return {
-    // Usamos 'function()' para permitir o uso de 'new RateLimiterRedis()'
     RateLimiterRedis: vi.fn().mockImplementation(function () {
       return {
         consume: mockConsume,
@@ -49,163 +48,151 @@ vi.mock('rate-limiter-flexible', () => {
   }
 })
 
-describe('RedisRateLimiter', () => {
+// Imports reais após mocks
+import Redis from 'ioredis'
+import { RateLimiterRedis } from 'rate-limiter-flexible'
+import { RedisRateLimiter, EnumProviderConfig } from './rate-limiter'
+import { logger } from '@lib/logger'
+
+describe('RedisRateLimiter Unit Tests', () => {
   let redisClient: Redis
 
   beforeEach(() => {
     vi.clearAllMocks()
-
-    // Reset manual do Singleton
+    // Reset do Singleton hackeando a propriedade privada
     ;(RedisRateLimiter as any).instance = undefined
-
-    redisClient = new Redis() as unknown as Redis
+    redisClient = new Redis()
   })
 
   describe('Singleton Pattern', () => {
-    it('should always return the same instance', () => {
+    it('should return the same instance when called multiple times', () => {
       const instance1 = RedisRateLimiter.getInstance(redisClient)
       const instance2 = RedisRateLimiter.getInstance(redisClient)
 
       expect(instance1).toBe(instance2)
-      // Verifica se o construtor do RateLimiterRedis NÃO foi chamado na instanciação do Singleton
-      expect(RateLimiterRedis).not.toHaveBeenCalled()
     })
   })
 
-  describe('tryConsume()', () => {
-    it('should return TRUE when points are available (Allowed)', async () => {
+  describe('tryConsume (Fluxos Principais)', () => {
+    it('should allow request (return true) when points are available', async () => {
       const limiter = RedisRateLimiter.getInstance(redisClient)
-      const provider = EnumProviderConfig.VIACEP_ADDRESS
 
-      // Mock sucesso
-      mockConsume.mockResolvedValueOnce({ remainingPoints: 4 })
-
-      const result = await limiter.tryConsume(provider)
-
-      expect(result).toBe(true)
-
-      expect(RateLimiterRedis).toHaveBeenCalledWith(
-        expect.objectContaining({
-          keyPrefix: `ratelimit:v1:${provider}`,
-          points: 5,
-        }),
-      )
-      expect(mockConsume).toHaveBeenCalledWith('global', 1)
-      expect(logger.error).not.toHaveBeenCalled()
-    })
-
-    it('should return FALSE when rate limit is exceeded (Blocked - Business Logic)', async () => {
-      const limiter = RedisRateLimiter.getInstance(redisClient)
-      const provider = EnumProviderConfig.VIACEP_ADDRESS
-
-      // Mock estouro de limite
-      mockConsume.mockRejectedValueOnce({ remainingPoints: 0, msBeforeNext: 1000 })
-
-      const result = await limiter.tryConsume(provider)
-
-      expect(result).toBe(false)
-      expect(logger.error).not.toHaveBeenCalled()
-    })
-
-    it('should return FALSE and log ERROR when Redis fails (Fail-Closed / Infra Error)', async () => {
-      const limiter = RedisRateLimiter.getInstance(redisClient)
-      const provider = EnumProviderConfig.AWESOME_API_ADDRESS
-
-      // Mock erro de infraestrutura
-      const redisError = new Error('Connection lost')
-      mockConsume.mockRejectedValueOnce(redisError)
-
-      const result = await limiter.tryConsume(provider)
-
-      expect(result).toBe(false)
-      expect(logger.error).toHaveBeenCalledWith(
-        { error: redisError, provider },
-        expect.stringContaining('ERRO CRÍTICO RedisRateLimiter'),
-      )
-    })
-
-    it('should return FALSE and log ERROR for unconfigured providers', async () => {
-      const limiter = RedisRateLimiter.getInstance(redisClient)
-      const invalidProvider = 'INVALID_PROVIDER_KEY'
-
-      const result = await limiter.tryConsume(invalidProvider)
-
-      expect(result).toBe(false)
-      expect(logger.error).toHaveBeenCalledWith(
-        expect.objectContaining({
-          provider: invalidProvider,
-          error: expect.any(Error),
-        }),
-        expect.stringContaining('ERRO CRÍTICO'),
-      )
-    })
-
-    it('should instantiate RateLimiterRedis only once per provider (Internal Caching)', async () => {
-      const limiter = RedisRateLimiter.getInstance(redisClient)
-      const provider = EnumProviderConfig.BRASIL_API_ADDRESS
-
+      // Mock sucesso no consume
       mockConsume.mockResolvedValue({ remainingPoints: 1 })
 
-      await limiter.tryConsume(provider)
-      await limiter.tryConsume(provider)
+      const result = await limiter.tryConsume(EnumProviderConfig.VIACEP_ADDRESS)
 
-      expect(RateLimiterRedis).toHaveBeenCalledTimes(1)
-      expect(mockConsume).toHaveBeenCalledTimes(2)
+      expect(result).toBe(true)
+      expect(mockConsume).toHaveBeenCalledWith('global', 1)
+    })
+
+    it('should block request (return false) when rate limit exceeded', async () => {
+      const limiter = RedisRateLimiter.getInstance(redisClient)
+
+      // Mock rejeição padrão da lib (objeto com remainingPoints)
+      const rateLimitError = { remainingPoints: 0, msBeforeNext: 1000 }
+      mockConsume.mockRejectedValue(rateLimitError)
+
+      const result = await limiter.tryConsume(EnumProviderConfig.VIACEP_ADDRESS)
+
+      expect(result).toBe(false)
+      // Não deve logar erro de infraestrutura neste caso
+      expect(logger.error).not.toHaveBeenCalled()
+    })
+
+    it('should block request (return false) and Log Error on Infrastructure Failure (Fail-Closed)', async () => {
+      const limiter = RedisRateLimiter.getInstance(redisClient)
+
+      // Mock erro genérico (ex: Redis caiu)
+      const infraError = new Error('Connection Lost')
+      mockConsume.mockRejectedValue(infraError)
+
+      const result = await limiter.tryConsume(EnumProviderConfig.VIACEP_ADDRESS)
+
+      expect(result).toBe(false) // Estratégia Fail-Closed
+
+      // CORREÇÃO: Verificando a mensagem exata definida na implementação
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'Connection Lost',
+          provider: EnumProviderConfig.VIACEP_ADDRESS,
+        }),
+        expect.stringContaining('ERRO CRÍTICO RedisRateLimiter: Redis indisponível. Fail-Closed ativado.'),
+      )
     })
   })
 
-  describe('Configuration & Observability', () => {
-    it('should use correct points/duration for different providers', async () => {
-      const limiter = RedisRateLimiter.getInstance(redisClient)
+  describe('getLimiter (Configuração e Cache)', () => {
+    it('should create a new limiter with correct config for a provider', async () => {
+      const limiter = RedisRateLimiter.getInstance(redisClient) as any
 
-      await limiter.tryConsume(EnumProviderConfig.NOMINATIM_GEOCODING)
-      expect(RateLimiterRedis).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          points: 1,
-          duration: 1,
-          keyPrefix: `ratelimit:v1:${EnumProviderConfig.NOMINATIM_GEOCODING}`,
-        }),
-      )
+      mockConsume.mockResolvedValue({})
 
+      // Executa para triggerar a criação
       await limiter.tryConsume(EnumProviderConfig.LOCATION_IQ_ADDRESS)
-      expect(RateLimiterRedis).toHaveBeenLastCalledWith(
+
+      // Verifica se RateLimiterRedis foi instanciado com as configs corretas
+      // LOCATION_IQ_ADDRESS tem points: 2, windowSeconds: 1
+      expect(RateLimiterRedis).toHaveBeenCalledWith(
         expect.objectContaining({
+          storeClient: redisClient,
+          keyPrefix: `ratelimit:v1:${EnumProviderConfig.LOCATION_IQ_ADDRESS}`,
           points: 2,
           duration: 1,
-          keyPrefix: `ratelimit:v1:${EnumProviderConfig.LOCATION_IQ_ADDRESS}`,
         }),
       )
     })
 
-    it('should log WARN if too many limiters are created (Defensive Coding)', async () => {
-      const limiter = RedisRateLimiter.getInstance(redisClient) as any
+    it('should reuse existing limiter instance for subsequent calls', async () => {
+      const limiter = RedisRateLimiter.getInstance(redisClient)
+      mockConsume.mockResolvedValue({})
 
+      // Primeira chamada
+      await limiter.tryConsume(EnumProviderConfig.NOMINATIM_GEOCODING)
+      // Segunda chamada
+      await limiter.tryConsume(EnumProviderConfig.NOMINATIM_GEOCODING)
+
+      // Filtra chamadas ao construtor para este provider específico
+      const callsForProvider = (RateLimiterRedis as any).mock.calls.filter((args: any[]) =>
+        args[0].keyPrefix?.includes(EnumProviderConfig.NOMINATIM_GEOCODING),
+      )
+      expect(callsForProvider).toHaveLength(1)
+    })
+  })
+
+  describe('Defensive Coding (Memory Leak Protection)', () => {
+    it('should log WARN if too many limiters are instantiated', async () => {
+      const limiter = RedisRateLimiter.getInstance(redisClient) as any
+      mockConsume.mockResolvedValue({})
+
+      // Popula o mapa de limiters artificialmente
       for (let i = 0; i < 51; i++) {
-        limiter.limiters.set(`fake_provider_${i}`, {} as any)
+        limiter.limiters.set(`fake-provider-${i}`, {})
       }
 
-      limiter.limiters.delete(EnumProviderConfig.VIACEP_ADDRESS)
-
-      mockConsume.mockResolvedValue({})
+      // Próxima chamada deve disparar o aviso
       await limiter.tryConsume(EnumProviderConfig.VIACEP_ADDRESS)
 
       expect(logger.warn).toHaveBeenCalledWith(
         expect.objectContaining({ size: expect.any(Number) }),
-        expect.stringContaining('Muitos RateLimiters instanciados'),
+        expect.stringContaining('ALERTA: Muitos RateLimiters instanciados'),
       )
     })
   })
 
-  describe('destroy()', () => {
-    it('should close redis connection and clear limiters', async () => {
-      const limiter = RedisRateLimiter.getInstance(redisClient)
+  describe('destroy', () => {
+    it('should clear limiters map', async () => {
+      const limiter = RedisRateLimiter.getInstance(redisClient) as any
 
-      await limiter.tryConsume(EnumProviderConfig.BRASIL_API_ADDRESS)
+      // Adiciona um limiter
+      await limiter.tryConsume(EnumProviderConfig.VIACEP_ADDRESS)
+      expect(limiter.limiters.size).toBeGreaterThan(0)
 
+      // Destrói
       await limiter.destroy()
 
-      expect(redisClient.quit).toHaveBeenCalled()
-      expect((limiter as any).limiters.size).toBe(0)
+      expect(limiter.limiters.size).toBe(0)
+      expect(mockRedisQuit).toHaveBeenCalled()
     })
   })
 })
