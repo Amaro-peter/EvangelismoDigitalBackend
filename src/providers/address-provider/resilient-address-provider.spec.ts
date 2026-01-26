@@ -1,5 +1,3 @@
-// src/providers/address-provider/resilient-address-provider.spec.ts
-
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 
 // 1. Mocks de Ambiente e Logger

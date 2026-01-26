@@ -5,15 +5,12 @@ import { LocationIqProvider } from 'providers/geo-provider/location-iq-provider'
 import { NominatimGeoProvider } from 'providers/geo-provider/nominatim-provider'
 import request from 'supertest'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createRedisCacheConnection } from '@lib/redis/redis-cache-connection' // <-- Added import
-import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
-import { AddressProviderFailureError } from 'providers/address-provider/error/address-provider-failure-error'
-import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
+import { createRedisCacheConnection } from '@lib/redis/redis-cache-connection'
 
 // NOTE: This test suite hits REAL APIs for the "OK" scenarios.
 // It mocks ONLY the failures to force the fallback logic to execute.
 
-const redisConnection = createRedisCacheConnection() // <-- Added initialization
+const redisConnection = createRedisCacheConnection()
 
 describe('Real Geocoding Fallback Scenarios (e2e)', () => {
   beforeAll(async () => {

@@ -1,307 +1,347 @@
-// Mock environment variables FIRST
-import { vi, describe, it, expect, beforeEach, afterEach, type Mock } from 'vitest'
+// src/providers/geo-provider/resilient-geo-provider.spec.ts
 
+import { vi, describe, it, expect, beforeEach } from 'vitest'
+
+// 1. Mocks de Ambiente e Logger
 vi.mock('@lib/env', () => ({
   env: {
     NODE_ENV: 'test',
     LOG_LEVEL: 'silent',
-    DATABASE_URL: 'http://localhost',
     REDIS_HOST: 'localhost',
     REDIS_PORT: 6379,
-    APP_NAME: 'Test',
-    APP_PORT: 3000,
-    JWT_SECRET: 'x'.repeat(60),
-    FRONTEND_URL: 'http://localhost:5173',
-    HASH_SALT_ROUNDS: 12,
-    SMTP_EMAIL: 'test@example.com',
-    SMTP_PASSWORD: 'test',
-    SMTP_PORT: 465,
-    SMTP_HOST: 'smtp.test.com',
-    SMTP_SECURE: true,
-    ADMIN_EMAIL: 'admin@example.com',
-    AWESOME_API_URL: 'http://awesomeapi.test',
-    AWESOME_API_TOKEN: 'token',
-    VIACEP_API_URL: 'http://viacep.test',
-    NOMINATIM_API_URL: 'http://nominatim.test',
-    LOCATION_IQ_API_URL: 'http://locationiq.test',
-    LOCATION_IQ_API_TOKEN: 'token',
-    SENTRY_DSN: '',
   },
 }))
 
-import { ResilientGeoProvider } from './resilient-geo-provider'
-import { GeocodingProvider, GeoCoordinates, GeoPrecision, GeoSearchOptions } from './geo-provider.interface'
-import { Redis } from 'ioredis'
-import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-found-error'
-import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
-import { NoGeoProviderError } from './error/no-geo-provider-error'
-import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
-import { CachedFailureError } from '@lib/redis/helper/resilient-cache'
-
-// Mock dependencies
-vi.mock('ioredis')
 vi.mock('@lib/logger', () => ({
   logger: {
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
+    debug: vi.fn(),
   },
 }))
 
-// --- MOCK RESILIENT CACHE ---
-const mockGetOrFetch = vi.fn()
-
-vi.mock('@lib/redis/helper/resilient-cache', () => {
+// 2. Mock do IORedis
+vi.mock('ioredis', () => {
   return {
-    // FIX: Use a regular 'function' here so it can be called with 'new'
-    ResilientCache: vi.fn().mockImplementation(function () {
-      return {
-        generateKey: vi.fn((obj) => JSON.stringify(obj)),
-        getOrFetch: mockGetOrFetch,
-      }
-    }),
-    CachedFailureError: class CachedFailureError extends Error {
-      constructor(
-        public errorType: string,
-        message: string,
-      ) {
-        super(message)
-      }
-    },
+    default: vi.fn(),
+    Redis: vi.fn(),
   }
 })
 
-// Mock Redis (still needed for the Type signature)
-const mockRedis = {} as unknown as Redis
+// 3. Mock do ResilientCache e CachedFailureError
+// Usamos vi.hoisted para variáveis acessíveis dentro e fora do mock
+const { mockGetOrFetch, mockGenerateKey } = vi.hoisted(() => {
+  return {
+    mockGetOrFetch: vi.fn(),
+    mockGenerateKey: vi.fn().mockReturnValue('mock-geo-key'),
+  }
+})
 
-const defaultCacheOptions = {
-  prefix: 'geo',
-  defaultTtlSeconds: 60,
-  negativeTtlSeconds: 30,
-  maxPendingFetches: 1,
-  fetchTimeoutMs: 1000,
-  ttlJitterPercentage: 0,
+vi.mock('@lib/redis/helper/resilient-cache', () => {
+  class MockCachedFailureError extends Error {
+    public errorType: string
+    public errorData?: any
+
+    constructor(type: string, message: string, data?: any) {
+      super(message)
+      this.name = 'CachedFailureError'
+      this.errorType = type
+      this.errorData = data
+    }
+  }
+
+  return {
+    // Usamos function() tradicional para permitir 'new ResilientCache()'
+    ResilientCache: vi.fn().mockImplementation(function () {
+      return {
+        getOrFetch: mockGetOrFetch,
+        generateKey: mockGenerateKey,
+      }
+    }),
+    CachedFailureError: MockCachedFailureError,
+  }
+})
+
+// Imports reais
+import Redis from 'ioredis'
+import { ResilientGeoProvider } from './resilient-geo-provider'
+import { GeocodingProvider, GeoCoordinates, GeoPrecision, GeoSearchOptions } from './geo-provider.interface'
+import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-found-error'
+import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
+import { NoGeoProviderError } from './error/no-geo-provider-error'
+import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
+import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
+import { CachedFailureError } from '@lib/redis/helper/resilient-cache'
+
+// Helper: Objeto mockado estritamente tipado conforme GeoCoordinates
+const mockCoords: GeoCoordinates = {
+  lat: -23.55052,
+  lon: -46.633308,
+  precision: GeoPrecision.ROOFTOP,
+  providerName: 'MockProvider',
 }
 
-// Helper to create mock providers
-const createMockProvider = (name: string): GeocodingProvider =>
-  ({
-    search: vi.fn(),
-    searchStructured: vi.fn(),
-    constructor: { name },
-  }) as any
+const mockSearchOptions: GeoSearchOptions = {
+  street: 'Av Paulista',
+  city: 'São Paulo',
+  state: 'SP',
+  country: 'BR',
+}
 
-describe('ResilientGeoProvider', () => {
+describe('ResilientGeoProvider Unit Tests', () => {
+  let redisClient: Redis
   let provider1: GeocodingProvider
   let provider2: GeocodingProvider
-  let resilientProvider: ResilientGeoProvider
-
-  const mockCoords: GeoCoordinates = {
-    lat: -23.55052,
-    lon: -46.633308,
-    precision: GeoPrecision.ROOFTOP,
-  }
-
-  const mockSearchOptions: GeoSearchOptions = {
-    street: 'Av Paulista',
-    city: 'Sao Paulo',
-    state: 'SP',
-    country: 'BR',
-  }
 
   beforeEach(() => {
     vi.clearAllMocks()
-    provider1 = createMockProvider('Provider1')
-    provider2 = createMockProvider('Provider2')
+    redisClient = new Redis()
 
-    // Default behavior: Execute the fetcher (Cache Miss simulation)
-    mockGetOrFetch.mockImplementation(async (key, fetcher) => {
-      const signal = new AbortController().signal
-      return fetcher(signal)
+    // Mocks dos providers tipados como GeocodingProvider
+    provider1 = { search: vi.fn(), searchStructured: vi.fn() }
+    provider2 = { search: vi.fn(), searchStructured: vi.fn() }
+
+    // Mock padrão do getOrFetch para simular Cache Miss (executa o fetcher real)
+    mockGetOrFetch.mockImplementation(async (key, fetcher, mapper, signal) => {
+      const effectiveSignal = signal || new AbortController().signal
+      return fetcher(effectiveSignal)
     })
   })
+
+  const createProvider = (providers = [provider1, provider2]) => {
+    return new ResilientGeoProvider(providers, redisClient, {
+      prefix: 'geo-test:',
+      defaultTtlSeconds: 60,
+      negativeTtlSeconds: 10,
+    } as any)
+  }
 
   describe('Constructor', () => {
-    it('should throw NoGeoProviderError if provider list is empty', () => {
-      expect(() => {
-        new ResilientGeoProvider([], mockRedis, defaultCacheOptions)
-      }).toThrow(NoGeoProviderError)
+    it('should throw NoGeoProviderError if providers list is empty', () => {
+      expect(() => createProvider([])).toThrow(NoGeoProviderError)
     })
 
-    it('should instantiate correctly with valid providers', () => {
-      const instance = new ResilientGeoProvider([provider1], mockRedis, defaultCacheOptions)
-      expect(instance).toBeInstanceOf(ResilientGeoProvider)
+    it('should initialize successfully with valid providers', () => {
+      const provider = createProvider()
+      expect(provider).toBeInstanceOf(ResilientGeoProvider)
     })
   })
 
-  describe('search()', () => {
-    it('should return coordinates from the first provider if successful', async () => {
-      ;(provider1.search as Mock).mockResolvedValue(mockCoords)
-      resilientProvider = new ResilientGeoProvider([provider1, provider2], mockRedis, defaultCacheOptions)
+  describe('search - Cache Logic', () => {
+    it('should return coordinates from CACHE HIT without calling providers', async () => {
+      const provider = createProvider()
 
-      const result = await resilientProvider.search('test query')
+      // Simula Cache Hit (retorna valor GeoCoordinates direto)
+      mockGetOrFetch.mockResolvedValue(mockCoords)
+
+      const result = await provider.search('Av Paulista')
 
       expect(result).toEqual(mockCoords)
-      expect(provider1.search).toHaveBeenCalledWith('test query', expect.anything())
+      expect(mockGetOrFetch).toHaveBeenCalled()
+      expect(provider1.search).not.toHaveBeenCalled()
+    })
+
+    it('should re-throw CoordinatesNotFoundError from CACHE HIT (Cached Failure)', async () => {
+      const provider = createProvider()
+
+      const cachedError = new CachedFailureError('CoordinatesNotFoundError', 'Não encontrado')
+      mockGetOrFetch.mockRejectedValue(cachedError)
+
+      await expect(provider.search('Rua Inexistente')).rejects.toThrow(CoordinatesNotFoundError)
+    })
+
+    it('should throw GeoProviderFailureError on CACHE HIT with unexpected error type', async () => {
+      const provider = createProvider()
+
+      const cachedError = new CachedFailureError('UnknownError', 'Algo estranho')
+      mockGetOrFetch.mockRejectedValue(cachedError)
+
+      await expect(provider.search('Query')).rejects.toThrow(GeoProviderFailureError)
+    })
+
+    it('should execute fetch strategy on CACHE MISS', async () => {
+      const provider = createProvider()
+
+      vi.spyOn(provider1, 'search').mockResolvedValue(mockCoords)
+
+      const result = await provider.search('Av Paulista')
+
+      expect(result).toEqual(mockCoords)
+      expect(provider1.search).toHaveBeenCalled()
+    })
+  })
+
+  describe('searchStructured - Cache Logic', () => {
+    it('should return coordinates from CACHE HIT', async () => {
+      const provider = createProvider()
+      mockGetOrFetch.mockResolvedValue(mockCoords)
+
+      const result = await provider.searchStructured(mockSearchOptions)
+
+      expect(result).toEqual(mockCoords)
+      expect(provider1.searchStructured).not.toHaveBeenCalled()
+    })
+
+    it('should execute fetch strategy on CACHE MISS', async () => {
+      const provider = createProvider()
+      vi.spyOn(provider1, 'searchStructured').mockResolvedValue(mockCoords)
+
+      const result = await provider.searchStructured(mockSearchOptions)
+
+      expect(result).toEqual(mockCoords)
+      expect(provider1.searchStructured).toHaveBeenCalledWith(mockSearchOptions, expect.anything())
+    })
+  })
+
+  describe('executeStrategy (Provider Logic)', () => {
+    // Testes usando 'search' como proxy para testar o executeStrategy
+    it('should return result immediately if first provider succeeds', async () => {
+      const provider = createProvider()
+
+      vi.spyOn(provider1, 'search').mockResolvedValue(mockCoords)
+
+      const result = await provider.search('Query')
+
+      expect(result).toEqual(mockCoords)
+      expect(provider1.search).toHaveBeenCalled()
       expect(provider2.search).not.toHaveBeenCalled()
     })
 
-    it('should failover to second provider if first returns null (soft failure)', async () => {
-      ;(provider1.search as Mock).mockResolvedValue(null)
-      ;(provider2.search as Mock).mockResolvedValue(mockCoords)
-      resilientProvider = new ResilientGeoProvider([provider1, provider2], mockRedis, defaultCacheOptions)
+    it('should fallback to second provider if first returns NULL (not found)', async () => {
+      const provider = createProvider()
 
-      const result = await resilientProvider.search('test query')
+      vi.spyOn(provider1, 'search').mockResolvedValue(null)
+      vi.spyOn(provider2, 'search').mockResolvedValue(mockCoords)
+
+      const result = await provider.search('Query')
 
       expect(result).toEqual(mockCoords)
       expect(provider1.search).toHaveBeenCalled()
       expect(provider2.search).toHaveBeenCalled()
     })
 
-    it('should failover to second provider if first throws system error', async () => {
-      ;(provider1.search as Mock).mockRejectedValue(new Error('Network Error'))
-      ;(provider2.search as Mock).mockResolvedValue(mockCoords)
-      resilientProvider = new ResilientGeoProvider([provider1, provider2], mockRedis, defaultCacheOptions)
+    it('should fallback to second provider if first throws CoordinatesNotFoundError', async () => {
+      const provider = createProvider()
 
-      const result = await resilientProvider.search('test query')
+      vi.spyOn(provider1, 'search').mockRejectedValue(new CoordinatesNotFoundError())
+      vi.spyOn(provider2, 'search').mockResolvedValue(mockCoords)
+
+      const result = await provider.search('Query')
 
       expect(result).toEqual(mockCoords)
       expect(provider2.search).toHaveBeenCalled()
     })
 
-    it('should failover if first provider throws GeoServiceBusyError', async () => {
-      ;(provider1.search as Mock).mockRejectedValue(new GeoServiceBusyError('Awesome API'))
-      ;(provider2.search as Mock).mockResolvedValue(mockCoords)
-      resilientProvider = new ResilientGeoProvider([provider1, provider2], mockRedis, defaultCacheOptions)
+    it('should fallback to second provider if first fails with System Error (Busy/Generic)', async () => {
+      const provider = createProvider()
 
-      const result = await resilientProvider.search('test query')
+      vi.spyOn(provider1, 'search').mockRejectedValue(new GeoServiceBusyError('MockProvider1'))
+      vi.spyOn(provider2, 'search').mockResolvedValue(mockCoords)
+
+      const result = await provider.search('Query')
+
+      expect(result).toEqual(mockCoords)
+      expect(provider2.search).toHaveBeenCalled()
+    })
+
+    it('should fallback to second provider if first returns 404 status object', async () => {
+      const provider = createProvider()
+      // Simula erro de axios ou similar
+      vi.spyOn(provider1, 'search').mockRejectedValue({ status: 404, message: 'Not Found' })
+      vi.spyOn(provider2, 'search').mockResolvedValue(mockCoords)
+
+      const result = await provider.search('Query')
 
       expect(result).toEqual(mockCoords)
     })
 
-    it('should throw CoordinatesNotFoundError if ALL providers return null', async () => {
-      ;(provider1.search as Mock).mockResolvedValue(null)
-      ;(provider2.search as Mock).mockResolvedValue(null)
-      resilientProvider = new ResilientGeoProvider([provider1, provider2], mockRedis, defaultCacheOptions)
+    it('should throw CoordinatesNotFoundError if ALL providers return not found (null/CoordinatesNotFoundError/404)', async () => {
+      const provider = createProvider()
 
-      await expect(resilientProvider.search('unknown place')).rejects.toThrow(CoordinatesNotFoundError)
+      vi.spyOn(provider1, 'search').mockResolvedValue(null)
+      vi.spyOn(provider2, 'search').mockRejectedValue(new CoordinatesNotFoundError())
+
+      await expect(provider.search('Nowhere')).rejects.toThrow(CoordinatesNotFoundError)
     })
 
-    it('should throw CoordinatesNotFoundError if ALL providers return CoordinatesNotFoundError or 404', async () => {
-      ;(provider1.search as Mock).mockRejectedValue(new CoordinatesNotFoundError())
-      ;(provider2.search as Mock).mockRejectedValue({ status: 404 })
-      resilientProvider = new ResilientGeoProvider([provider1, provider2], mockRedis, defaultCacheOptions)
+    it('should throw GeoProviderFailureError if ANY provider had a System Error, even if others said Not Found', async () => {
+      const provider = createProvider()
 
-      await expect(resilientProvider.search('unknown place')).rejects.toThrow(CoordinatesNotFoundError)
+      // Provedor 1 falha com erro de sistema
+      vi.spyOn(provider1, 'search').mockRejectedValue(new GeoServiceBusyError('MockProvider1'))
+      // Provedor 2 diz que não existe
+      vi.spyOn(provider2, 'search').mockResolvedValue(null)
+
+      // Regra de negócio: Se houve erro de sistema, não podemos afirmar que não existe
+      await expect(provider.search('Query')).rejects.toThrow(GeoProviderFailureError)
     })
 
-    it('should throw system error (last error) if all fail with system errors', async () => {
-      const error1 = new Error('Timeout')
-      const error2 = new Error('API Down')
-      ;(provider1.search as Mock).mockRejectedValue(error1)
-      ;(provider2.search as Mock).mockRejectedValue(error2)
-      resilientProvider = new ResilientGeoProvider([provider1, provider2], mockRedis, defaultCacheOptions)
+    it('should throw GeoProviderFailureError if ALL providers have System Errors', async () => {
+      const provider = createProvider()
 
-      await expect(resilientProvider.search('query')).rejects.toThrow('API Down')
-    })
-  })
+      vi.spyOn(provider1, 'search').mockRejectedValue(new Error('Connection timeout'))
+      vi.spyOn(provider2, 'search').mockRejectedValue(new GeoServiceBusyError('MockProvider2'))
 
-  describe('searchStructured()', () => {
-    it('should return coordinates from the first provider if successful', async () => {
-      ;(provider1.searchStructured as Mock).mockResolvedValue(mockCoords)
-      resilientProvider = new ResilientGeoProvider([provider1], mockRedis, defaultCacheOptions)
-
-      const result = await resilientProvider.searchStructured(mockSearchOptions)
-
-      expect(result).toEqual(mockCoords)
-      expect(provider1.searchStructured).toHaveBeenCalledWith(mockSearchOptions, expect.anything())
+      await expect(provider.search('Query')).rejects.toThrow(GeoProviderFailureError)
     })
 
-    it('should failover correctly in structured search', async () => {
-      ;(provider1.searchStructured as Mock).mockRejectedValue(new Error('Fail'))
-      ;(provider2.searchStructured as Mock).mockResolvedValue(mockCoords)
-      resilientProvider = new ResilientGeoProvider([provider1, provider2], mockRedis, defaultCacheOptions)
+    it('should stop immediately and throw TimeoutExceededOnFetchError if signal is aborted', async () => {
+      const provider = createProvider()
+      const controller = new AbortController()
+      controller.abort(new Error('Timeout'))
 
-      const result = await resilientProvider.searchStructured(mockSearchOptions)
-
-      expect(result).toEqual(mockCoords)
-    })
-  })
-
-  describe('Caching Behavior', () => {
-    beforeEach(() => {
-      resilientProvider = new ResilientGeoProvider([provider1], mockRedis, defaultCacheOptions)
-    })
-
-    it('should return cached result if available (Cache Hit)', async () => {
-      // Mock Cache HIT
-      mockGetOrFetch.mockResolvedValue(mockCoords)
-
-      const result = await resilientProvider.search('cached query')
-
-      expect(result).toEqual(mockCoords)
-      expect(provider1.search).not.toHaveBeenCalled()
-    })
-
-    it('should cache "CoordinatesNotFoundError" (Business Error Caching)', async () => {
-      ;(provider1.search as Mock).mockRejectedValue(new CoordinatesNotFoundError())
-
-      // 1. Cache Miss (Calls fetcher)
-      mockGetOrFetch.mockImplementationOnce(async (key, fetcher) => fetcher(new AbortController().signal))
-
-      await expect(resilientProvider.search('nowhere')).rejects.toThrow(CoordinatesNotFoundError)
-      expect(provider1.search).toHaveBeenCalledTimes(1)
-
-      // 2. Cache Hit (Throws cached error)
-      mockGetOrFetch.mockRejectedValue(new CachedFailureError('CoordinatesNotFoundError', 'Not found'))
-
-      await expect(resilientProvider.search('nowhere')).rejects.toThrow(CoordinatesNotFoundError)
-      expect(provider1.search).toHaveBeenCalledTimes(1)
-    })
-
-    it('should NOT cache system errors', async () => {
-      ;(provider1.search as Mock).mockRejectedValue(new Error('System Crash'))
-      await expect(resilientProvider.search('crash')).rejects.toThrow('System Crash')
-    })
-
-    it('should handle CachedFailureError with unexpected type by logging and throwing GeoProviderFailureError', async () => {
-      mockGetOrFetch.mockRejectedValue(new CachedFailureError('UnknownErrorType', '???'))
-      await expect(resilientProvider.search('query')).rejects.toThrow(GeoProviderFailureError)
-    })
-  })
-
-  describe('Cancellation (AbortSignal)', () => {
-    it('should propagate abort signal to providers', async () => {
-      const abortController = new AbortController()
-      resilientProvider = new ResilientGeoProvider([provider1], mockRedis, defaultCacheOptions)
-
-      // Pass signal through mock cache
-      mockGetOrFetch.mockImplementation(async (key, fetcher, mapper, signal) => fetcher(signal))
-
-      // FIX: Add small delay to ensure the abort happens while request is "in flight"
-      ;(provider1.search as Mock).mockImplementation(async (q, signal) => {
-        await new Promise((resolve) => setTimeout(resolve, 20)) // Tiny delay
-        if (signal.aborted) throw signal.reason
-        return mockCoords
+      mockGetOrFetch.mockImplementation(async (key, fetcher, mapper, signal) => {
+        // Passamos o signal cancelado para o fetcher
+        return fetcher(signal)
       })
 
-      const promise = resilientProvider.search('query', abortController.signal)
-      abortController.abort()
+      await expect(provider.search('Query', controller.signal)).rejects.toThrow(TimeoutExceededOnFetchError)
 
-      await expect(promise).rejects.toThrow()
+      expect(provider1.search).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Error Mapper Logic', () => {
+    it('should map CoordinatesNotFoundError to cacheable object', async () => {
+      const provider = createProvider()
+      let interceptedMapper: any
+
+      // Intercepta o errorMapper passado para o cache
+      mockGetOrFetch.mockImplementation(async (key, fetcher, errorMapper) => {
+        interceptedMapper = errorMapper
+        return null // Simula execução sem retorno para permitir teste do mapper
+      })
+
+      await provider.search('Query')
+
+      expect(interceptedMapper).toBeDefined()
+
+      const error = new CoordinatesNotFoundError()
+      const mapped = interceptedMapper(error)
+
+      expect(mapped).toEqual({
+        type: 'CoordinatesNotFoundError',
+        message: expect.any(String),
+        data: { query: 'Query' },
+      })
     })
 
-    it('should stop failover loop if signal is aborted', async () => {
-      const abortController = new AbortController()
-      resilientProvider = new ResilientGeoProvider([provider1, provider2], mockRedis, defaultCacheOptions)
+    it('should return NULL for system errors (preventing cache)', async () => {
+      const provider = createProvider()
+      let interceptedMapper: any
 
-      mockGetOrFetch.mockImplementation(async (key, fetcher, mapper, signal) => fetcher(signal))
-      ;(provider1.search as Mock).mockRejectedValue(new Error('Fail 1'))
+      mockGetOrFetch.mockImplementation(async (key, fetcher, errorMapper) => {
+        interceptedMapper = errorMapper
+        return null
+      })
 
-      abortController.abort()
+      await provider.search('Query')
 
-      await expect(resilientProvider.search('query', abortController.signal)).rejects.toBeTruthy()
-      expect(provider2.search).not.toHaveBeenCalled()
+      const error = new Error('System Crash')
+      const mapped = interceptedMapper(error)
+
+      expect(mapped).toBeNull()
     })
   })
 })
