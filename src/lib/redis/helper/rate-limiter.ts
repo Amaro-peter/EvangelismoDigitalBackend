@@ -1,7 +1,7 @@
-import { RateLimiterRedis } from 'rate-limiter-flexible'
 import Redis from 'ioredis'
-import { logger } from '@lib/logger'
+import { RateLimiterRedis } from 'rate-limiter-flexible'
 import { NoRateLimiterSetError } from '../errors/noRateLimiterSetError'
+import { logger } from '@lib/logger'
 
 /**
  * DESIGN DECISION — Rate Limiting Strategy
@@ -61,35 +61,35 @@ export class RedisRateLimiter {
   private static instance: RedisRateLimiter | null
   private readonly redis: Redis
 
-  // 1 limiter por provider (contrato honesto)
-  private readonly limiters = new Map<string, RateLimiterRedis>()
+  // 1 limiter por provider
+  private readonly limiters = new Map<EnumProviderConfig, RateLimiterRedis>()
 
   /**
    * Central de configuração dos providers
    * ➜ Impossível usar errado
    */
-  private readonly providerConfigs: Record<string, ProviderRateLimitConfig> = {
-    awesomeApiAddressProvider: {
+  private readonly providerConfigs: Record<EnumProviderConfig, ProviderRateLimitConfig> = {
+    [EnumProviderConfig.AWESOME_API_ADDRESS]: {
       points: 5,
       windowSeconds: 1,
     },
-    viacepAddressProvider: {
+    [EnumProviderConfig.VIACEP_ADDRESS]: {
       points: 1,
       windowSeconds: 1,
     },
-    locationIqAddressProvider: {
+    [EnumProviderConfig.BRASIL_API_ADDRESS]: {
+      points: 5,
+      windowSeconds: 1,
+    },
+    [EnumProviderConfig.LOCATION_IQ_ADDRESS]: {
       points: 2,
       windowSeconds: 1,
     },
-    brasilApiAddressProvider: {
-      points: 5,
-      windowSeconds: 1,
-    },
-    nominatimGeocodingProvider: {
+    [EnumProviderConfig.NOMINATIM_GEOCODING]: {
       points: 1,
       windowSeconds: 1,
     },
-    locationIqGeocodingProvider: {
+    [EnumProviderConfig.LOCATION_IQ_GEOCODING]: {
       points: 2,
       windowSeconds: 1,
     },
@@ -103,6 +103,7 @@ export class RedisRateLimiter {
     if (!this.instance) {
       this.instance = new RedisRateLimiter(redis)
     }
+
     return this.instance
   }
 
@@ -110,7 +111,7 @@ export class RedisRateLimiter {
    * Retorna ou cria um RateLimiter para o provider.
    * ❗ Provider PRECISA existir em providerConfigs.
    */
-  private getLimiter(provider: string): RateLimiterRedis {
+  private getLimiter(provider: EnumProviderConfig): RateLimiterRedis {
     const config = this.providerConfigs[provider]
 
     if (!config) {
@@ -148,8 +149,8 @@ export class RedisRateLimiter {
    * Consome 1 ponto do Rate Limit do provider.
    * Bucket GLOBAL compartilhado por todas as instâncias.
    */
-  async tryConsume(provider: string): Promise<boolean> {
-    const CONSUMER_KEY = 'global'
+  async tryConsume(provider: EnumProviderConfig): Promise<boolean> {
+    const CONSUMER_KEY = 'global' // Rate Limit GLOBAL por provider
 
     try {
       const limiter = this.getLimiter(provider)
@@ -187,7 +188,7 @@ export class RedisRateLimiter {
 
   static async destroyInstance() {
     if (!this.instance) {
-      logger.debug('No RateLimiter instance to destroy')
+      logger.debug('Nenhuma instância de RedisRateLimiter para destruir.')
       return
     }
 
@@ -198,11 +199,7 @@ export class RedisRateLimiter {
 
   private async destroyRateLimiterMap() {
     for (const [provider] of this.limiters.entries()) {
-      try {
-        logger.debug({ provider }, 'Clearing rate limiter instance')
-      } catch (error) {
-        logger.error({ error, provider }, 'Error clearing rate limiter')
-      }
+      logger.debug({ provider }, 'Limpando RateLimiter do provider.')
     }
 
     this.limiters.clear()
