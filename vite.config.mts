@@ -81,7 +81,7 @@ export default defineConfig(({ mode }) => {
           test: {
             name: 'e2e',
             dir: 'src/http/controllers',
-            exclude: ['**/geo-real-fallback.spec.ts'],
+            exclude: ['**/api-providers-fallback-strategy.e2e.spec.ts'],
             // Uses isolated schemas for each test run
             environment: './prisma/vitest-environment-prisma/prisma-test-environment.ts',
           },
@@ -89,8 +89,8 @@ export default defineConfig(({ mode }) => {
         {
           extends: true,
           test: {
-            name: 'e2e-geo-fallback',
-            include: ['**/geo-real-fallback.spec.ts'],
+            name: 'e2e-api-providers-fallback-strategy',
+            include: ['**/api-providers-fallback-strategy.e2e.spec.ts'],
             // Uses Docker database with public schema (no isolation)
             environment: './prisma/vitest-environment-prisma/prisma-docker-environment.ts',
           },
