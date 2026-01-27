@@ -8,10 +8,9 @@ import z, { ZodError } from 'zod'
 import { messages } from '@constants/messages'
 import fastifyJwt from '@fastify/jwt'
 import fastifyCors from '@fastify/cors'
-import rateLimit from '@fastify/rate-limit'
 import * as Sentry from '@sentry/node'
 import { nodeProfilingIntegration } from '@sentry/profiling-node'
-
+import { closeAllRedisConnections } from '@lib/redis/clients'
 z.config(z.locales.pt())
 
 export const app = fastify({
@@ -107,12 +106,6 @@ app.register(fastifyJwt, {
   secret: env.JWT_SECRET,
 })
 
-app.register(rateLimit, {
-  global: false,
-  max: 100,
-  timeWindow: '15 minutes',
-})
-
 app.register(appRoutes)
 
 app.setErrorHandler((error, _request, reply) => {
@@ -136,5 +129,10 @@ app.setErrorHandler((error, _request, reply) => {
     logger.error('Unhandled error occurred')
   }
 
-  reply.status(500).send({ message: messages.errors.internalServer })
+  reply.status(500).send({ message: messages.errors.internalServer, error: error.message })
+})
+
+app.addHook('onClose', async (instance) => {
+  logger.info('🛑 Shutting down Redis connections...')
+  await closeAllRedisConnections()
 })

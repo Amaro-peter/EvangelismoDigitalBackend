@@ -1,0 +1,109 @@
+import { defineConfig } from 'vitest/config'
+import { loadEnv } from 'vite'
+import tsconfigPaths from 'vite-tsconfig-paths'
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+
+  return {
+    plugins: [tsconfigPaths()],
+    test: {
+      globals: true,
+      dir: 'src',
+      environment: 'node',
+      env: env,
+      projects: [
+        {
+          extends: true,
+          test: {
+            name: 'unit-use-cases',
+            dir: 'src/use-cases',
+          },
+        },
+        {
+          extends: true,
+          test: {
+            name: 'unit-churches',
+            dir: 'src/use-cases/churches',
+          },
+        },
+        {
+          extends: true,
+          test: {
+            name: 'unit-users',
+            dir: 'src/use-cases/users',
+          },
+        },
+        {
+          extends: true,
+          test: {
+            name: 'unit-messaging',
+            dir: 'src/use-cases/messaging',
+          },
+        },
+        {
+          extends: true,
+          test: {
+            name: 'unit-forms',
+            dir: 'src/use-cases/forms',
+          },
+        },
+        {
+          extends: true,
+          test: {
+            name: 'unit-geo-provider',
+            dir: 'src/providers/geo-provider',
+          },
+        },
+        {
+          extends: true,
+          test: {
+            name: 'unit-address-provider',
+            dir: 'src/providers/address-provider',
+          },
+        },
+        {
+          extends: true,
+          test: {
+            name: 'unit-resilient-cache',
+            dir: 'src/lib/redis/helper',
+          },
+        },
+        {
+          extends: true,
+          test: {
+            name: 'unit-rate-limiter',
+            dir: 'src/lib/redis',
+          },
+        },
+        {
+          extends: true,
+          test: {
+            name: 'e2e',
+            dir: 'src/http/controllers',
+            exclude: ['**/geo-real-fallback.spec.ts'],
+            // Uses isolated schemas for each test run
+            environment: './prisma/vitest-environment-prisma/prisma-test-environment.ts',
+          },
+        },
+        {
+          extends: true,
+          test: {
+            name: 'e2e-geo-fallback',
+            include: ['**/geo-real-fallback.spec.ts'],
+            // Uses Docker database with public schema (no isolation)
+            environment: './prisma/vitest-environment-prisma/prisma-docker-environment.ts',
+          },
+        },
+        {
+          extends: true,
+          test: {
+            name: 'e2e-users',
+            dir: 'src/http/controllers/users',
+            environment: './prisma/vitest-environment-prisma/prisma-test-environment.ts',
+          },
+        },
+      ],
+    },
+  }
+})

@@ -1,13 +1,18 @@
-import { Prisma } from "@prisma/client"
+export interface ChurchAlreadyExists {
+  name: string
+  lat: number
+  lon: number
+}
 
 export interface NearbyChurch {
-    id: number
-    name: string
-    address: string | null
-    lat: number
-    lon: number
-    distanceKm: number
-    distanceMeters: number
+  id: number
+  publicId: string
+  name: string
+  address: string | null
+  lat: number
+  lon: number
+  distanceKm: number
+  distanceMeters: number
 }
 
 export interface FindNearbyParams {
@@ -21,7 +26,7 @@ export interface Church {
   id: number
   publicId: string
   name: string
-  address: string | null
+  address: string
   lat: number
   lon: number
   geog?: unknown | null
@@ -30,7 +35,9 @@ export interface Church {
 }
 
 export interface ChurchesRepository {
-    findNearest(params: FindNearbyParams): Promise<NearbyChurch[]>
-    createChurch(data: Prisma.ChurchCreateInput): Promise<Church>
+  findNearest(params: FindNearbyParams): Promise<NearbyChurch[]>
+  findByParams(params: ChurchAlreadyExists): Promise<Church | null>
+  findByName(name: string): Promise<Church | null>
+  createChurch(data: Omit<Church, 'id' | 'publicId' | 'createdAt' | 'updatedAt' | 'geog'>): Promise<Church | null>
+  deleteChurchByPublicId(publicId: string): Promise<Church | null>
 }
-

@@ -1,11 +1,11 @@
-import { emailSchema } from '@http/schemas/utils/email'
 import { User } from '@prisma/client'
-import { UserRepository } from '@repositories/users-repository'
-import { UserNotFoundForPasswordResetError } from '@use-cases/errors/user-not-found-for-password-reset-error'
 import { randomBytes } from 'crypto'
+import { UserNotFoundForPasswordResetError } from '../errors/user-not-found-for-password-reset-error'
+import { emailSchema } from '@http/schemas/utils/email'
+import { UsersRepository } from '@repositories/users-repository'
 
 interface ForgotPasswordUseCaseRequest {
-  login: string
+  email: string
 }
 
 type ForgotPasswordUseCaseResponse = {
@@ -17,16 +17,16 @@ const EXPIRES_IN_MINUTES = 15
 const TOKEN_LENGTH = 32
 
 export class ForgotPasswordUseCase {
-  constructor(private usersRepository: UserRepository) {}
+  constructor(private usersRepository: UsersRepository) {}
 
-  async execute({ login }: ForgotPasswordUseCaseRequest): Promise<ForgotPasswordUseCaseResponse> {
+  async execute({ email }: ForgotPasswordUseCaseRequest): Promise<ForgotPasswordUseCaseResponse> {
     let userExists: User | null = null
 
-    if (emailSchema.safeParse(login).success) {
-      userExists = await this.usersRepository.findBy({ email: login })
-    } else {
-      userExists = await this.usersRepository.findBy({ username: login })
+    if (emailSchema.safeParse(email).success) {
+      userExists = await this.usersRepository.findBy({ email: email! })
     }
+
+    if (!userExists) throw new UserNotFoundForPasswordResetError()
 
     const passwordToken = randomBytes(TOKEN_LENGTH).toString('hex')
 
@@ -34,14 +34,14 @@ export class ForgotPasswordUseCase {
 
     const tokenData = {
       token: passwordToken,
-      tokenExpiresAt,
+      tokenExpiresAt: tokenExpiresAt,
     }
 
-    if (!userExists) throw new UserNotFoundForPasswordResetError()
-
-    const user = await this.usersRepository.update(userExists.id, {
+    const user = await this.usersRepository.updatePassword(userExists.publicId, {
       ...tokenData,
     })
+
+    if (!user) throw new UserNotFoundForPasswordResetError()
 
     return {
       user,

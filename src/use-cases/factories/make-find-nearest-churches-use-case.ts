@@ -1,10 +1,15 @@
-import { PrismaChurchesRepository } from "@repositories/prisma/prisma-churches-repository";
-import { FindNearestChurchesUseCase } from "@use-cases/churches/find-nearest-churches-use-case";
+import { PrismaChurchesRepository } from '@repositories/prisma/prisma-churches-repository'
+import { FindNearestChurchesUseCase } from '@use-cases/churches/find-nearest-churches-use-case'
 
+let cachedUseCase: FindNearestChurchesUseCase | null = null
 
 export function makeFindNearestChurchesUseCase() {
-    const churchesRepository = new PrismaChurchesRepository()
-    const findNearestChurchesUseCase = new FindNearestChurchesUseCase(churchesRepository)
+  if (cachedUseCase) {
+    return cachedUseCase
+  }
 
-    return findNearestChurchesUseCase
+  const churchesRepository = new PrismaChurchesRepository()
+  cachedUseCase = new FindNearestChurchesUseCase(churchesRepository)
+
+  return cachedUseCase
 }

@@ -3,8 +3,8 @@ import { logger } from '@lib/logger'
 import { UserAlreadyExistsError } from '@use-cases/errors/user-already-exists-error'
 import { registerSchema } from '@http/schemas/users/register-schema'
 import { makeRegisterUserUseCase } from '@use-cases/factories/make-register-user-use-case'
-import { UserRole } from '@prisma/client'
 import { UserPresenter } from '@http/presenters/user-presenter'
+import { UserRole } from '@repositories/users-repository'
 
 export async function register(request: FastifyRequest, reply: FastifyReply) {
   try {
@@ -21,7 +21,7 @@ export async function register(request: FastifyRequest, reply: FastifyReply) {
       role: UserRole.DEFAULT,
     })
 
-    logger.info({ userId: user.publicId }, 'Researcher registered successfully!')
+    logger.info({ userId: user.publicId }, 'Default user registered successfully!')
 
     reply.status(201).send({ user: UserPresenter.toHTTP(user) })
   } catch (error) {
@@ -40,6 +40,8 @@ export async function registerAdmin(request: FastifyRequest, reply: FastifyReply
     const registerUseCase = makeRegisterUserUseCase()
 
     const { user } = await registerUseCase.execute({ name, email, cpf, username, password, role: UserRole.ADMIN })
+
+    logger.info({ userId: user.publicId }, 'Admin user registered successfully!')
 
     return reply.status(201).send({ user: UserPresenter.toHTTP(user) })
   } catch (error) {

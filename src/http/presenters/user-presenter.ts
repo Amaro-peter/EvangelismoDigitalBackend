@@ -1,7 +1,7 @@
 import { User, UserRole } from '@prisma/client'
 
 type HTTPUser = {
-  id: string
+  publicId: string
   name: string
   email: string
   cpf: string
@@ -19,7 +19,7 @@ export class UserPresenter {
     }
 
     return {
-      id: input.publicId,
+      publicId: input.publicId,
       name: input.name,
       email: input.email,
       cpf: input.cpf,

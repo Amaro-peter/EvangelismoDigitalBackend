@@ -5,36 +5,36 @@ import { UserPresenter } from '@http/presenters/user-presenter'
 import { makeUpdateUserUseCase } from '@use-cases/factories/make-update-user-use-case'
 import { updateSchema } from '@http/schemas/users/update-schema'
 import { publicIdSchema } from '@http/schemas/utils/public-id-schema'
+import { messages } from '@constants/messages'
 
 export async function updateUser(request: FastifyRequest, reply: FastifyReply) {
   try {
-    const { name, email, password } = updateSchema.parse(request.body)
+    const bodyParse = updateSchema.safeParse(request.body)
+    if (!bodyParse.success) {
+      return reply.status(400).send({
+        message: 'Dados de registro inválidos!',
+      })
+    }
+    const { name, username, email } = bodyParse.data
 
-    const updateUserUseCase = makeUpdateUserUseCase()
+    const authUser = request.user as { publicId?: string; sub?: string }
 
-    const { user } = await updateUserUseCase.execute({
-      publicId: request.user.sub,
-      name,
-      email,
-      password,
-    })
+    const publicId = authUser?.publicId ?? authUser?.sub
 
-    logger.info('User updated successfully!')
-
-    return reply.status(200).send(UserPresenter.toHTTP(user))
-  } catch (error) {
-    if (error instanceof ResourceNotFoundError) {
-      return reply.status(404).send({ message: error.message })
+    if (!publicId) {
+      return reply.status(401).send({ message: messages.errors.unauthorized ?? 'Unauthorized' })
     }
 
-    throw error
-  }
-}
+    if (!publicId) {
+      return reply.status(401).send({ message: messages.errors.unauthorized ?? 'Unauthorized' })
+    }
 
-export async function updateUserByPublicId(request: FastifyRequest, reply: FastifyReply) {
-  try {
-    const { name, email, password } = updateSchema.parse(request.body)
-    const { publicId } = publicIdSchema.parse(request.params)
+    const fallbackValid = publicIdSchema.safeParse({ publicId })
+    if (!fallbackValid.success) {
+      return reply.status(400).send({
+        message: 'Parâmetros inválidos!',
+      })
+    }
 
     const updateUserUseCase = makeUpdateUserUseCase()
 
@@ -42,7 +42,7 @@ export async function updateUserByPublicId(request: FastifyRequest, reply: Fasti
       publicId,
       name,
       email,
-      password,
+      username,
     })
 
     logger.info('User updated successfully!')

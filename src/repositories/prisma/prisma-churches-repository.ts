@@ -1,5 +1,5 @@
 import { prisma } from '@lib/prisma'
-import { ChurchesRepository, NearbyChurch, FindNearbyParams, Church } from '../churches-repository'
+import { ChurchesRepository, NearbyChurch, FindNearbyParams, Church, ChurchAlreadyExists } from '../churches-repository'
 import { Prisma } from '@prisma/client'
 
 /**
@@ -88,7 +88,6 @@ interface RawChurch {
   distanceMeters: number
 }
 
-
 export class PrismaChurchesRepository implements ChurchesRepository {
   async findNearest({ userLat, userLon, limit = 20 }: FindNearbyParams): Promise<NearbyChurch[]> {
     // For small datasets, we use a safety margin of 5x the requested limit
@@ -138,18 +137,88 @@ export class PrismaChurchesRepository implements ChurchesRepository {
     }))
   }
 
-  async createChurch(data: Prisma.ChurchCreateInput): Promise<Church> {
-    const church: Church = await prisma.$queryRaw<Church>`
-      INSERT INTO churches (public_id, name, address, lat, lon, created_at, updated_at)
-      VALUES (
-        gen_random_uuid()::text,
-        ${data.name},
-        ${data.address},
-        ${data.lat},
-        ${data.lon},
-        NOW(),
-        NOW()
-      )
+  async findByParams(params: ChurchAlreadyExists): Promise<Church | null> {
+    const results = await prisma.$queryRaw<Church[]>`
+      SELECT
+        id,
+        public_id as "publicId",
+        name,
+        address,
+        lat,
+        lon,
+        geog::text as geog,
+        created_at as "createdAt",
+        updated_at as "updatedAt"
+      FROM churches
+      WHERE 
+        lower(trim(name)) = lower(trim(${params.name}))
+        OR
+        (
+          round(lat::numeric, 6) = round(${params.lat}::numeric, 6)
+          AND
+          round(lon::numeric, 6) = round(${params.lon}::numeric, 6)
+        )
+      LIMIT 1
+    `
+    return results[0] ?? null
+  }
+
+  async findByName(name: string): Promise<Church | null> {
+    const results = await prisma.$queryRaw<Church[]>`
+      SELECT
+        id,
+        public_id as "publicId",
+        name,
+        address,
+        lat,
+        lon,
+        geog::text as geog,
+        created_at as "createdAt",
+        updated_at as "updatedAt"
+      FROM churches
+      WHERE lower(trim(name)) = lower(trim(${name}))
+      LIMIT 1
+    `
+    return results[0] ?? null
+  }
+
+  async createChurch(data: Omit<Church, 'id' | 'publicId' | 'createdAt' | 'updatedAt' | 'geog'>): Promise<Church> {
+    try {
+      const church: Church = await prisma.$queryRaw<Church>`
+        INSERT INTO churches (public_id, name, address, lat, lon, created_at, updated_at)
+        VALUES (
+          gen_random_uuid()::text,
+          ${data.name},
+          ${data.address},
+          ${data.lat},
+          ${data.lon},
+          NOW(),
+          NOW()
+          )
+        RETURNING
+          id,
+          public_id AS "publicId",
+          name,
+          address,
+          lat,
+          lon,
+          geog::text AS geog,
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
+      `
+      return church
+    } catch (error: any) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new Error('church-already-exists')
+      }
+      throw error
+    }
+  }
+
+  async deleteChurchByPublicId(publicId: string): Promise<Church | null> {
+    const rows = await prisma.$queryRaw<Church[]>`
+      DELETE FROM churches 
+      WHERE public_id = ${publicId}
       RETURNING
         id,
         public_id AS "publicId",
@@ -161,6 +230,6 @@ export class PrismaChurchesRepository implements ChurchesRepository {
         created_at AS "createdAt",
         updated_at AS "updatedAt"
     `
-    return church
+    return rows[0] ?? null
   }
 }
