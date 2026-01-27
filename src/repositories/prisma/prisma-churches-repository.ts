@@ -1,6 +1,7 @@
 import { prisma } from '@lib/prisma'
 import { ChurchesRepository, NearbyChurch, FindNearbyParams, Church, ChurchAlreadyExists } from '../churches-repository'
 import { Prisma } from '@prisma/client'
+import { ChurchAlreadyExistsError } from '@use-cases/errors/church-already-exists-error'
 
 /**
  * FUTURE OPTIMIZATION: Table Partitioning for Geographic Regions
@@ -207,9 +208,9 @@ export class PrismaChurchesRepository implements ChurchesRepository {
           updated_at AS "updatedAt"
       `
       return church
-    } catch (error: any) {
+    } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        throw new Error('church-already-exists')
+        throw new ChurchAlreadyExistsError()
       }
       throw error
     }

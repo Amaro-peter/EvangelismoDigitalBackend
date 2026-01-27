@@ -8,42 +8,41 @@ import { cpf as cpfValidator } from 'cpf-cnpj-validator'
 import { ResourceNotFoundError } from '@use-cases/errors/resource-not-found-error'
 
 describe('Update Use Case', () => {
+  it('should throw ResourceNotFoundError when no user is found with the given publicId', async () => {
+    try {
+      const usersRepository = new InMemoryUsersRepository()
+      const registerUseCase = new RegisterUserUseCase(usersRepository)
 
-    it('should throw ResourceNotFoundError when no user is found with the given publicId', async () => {
-      try {
-        const usersRepository = new InMemoryUsersRepository()
-        const registerUseCase = new RegisterUserUseCase(usersRepository)
+      const newEmail = `janedoe${Date.now()}@gmail.com`
+      const newCpf = cpfValidator.generate()
+      const newUsername = 'janedoe'
+      const password = 'Teste123!!'
 
-        const newEmail = `janedoe${Date.now()}@gmail.com`
-        const newCpf = cpfValidator.generate()
-        const newUsername = 'janedoe'
-        const password = 'Teste123!!'
+      const { user } = await registerUseCase.execute({
+        name: 'Jane Doe',
+        email: newEmail,
+        cpf: newCpf,
+        password,
+        username: newUsername,
+        role: UserRole.DEFAULT,
+      })
 
-        const { user } = await registerUseCase.execute({
-          name: 'Jane Doe',
-          email: newEmail,
-          cpf: newCpf,
-          password,
-          username: newUsername,
-          role: UserRole.DEFAULT,
-        })
+      const updateSpy = vi.spyOn(usersRepository, 'findBy').mockResolvedValueOnce(null)
+      const updateUserUseCase = new UpdateUserUseCase(usersRepository)
 
-        const updateSpy = vi.spyOn(usersRepository, 'findBy').mockResolvedValueOnce(null)
-        const updateUserUseCase = new UpdateUserUseCase(usersRepository)
+      await expect(() =>
+        updateUserUseCase.execute({
+          publicId: user.publicId,
+          name: 'Jane Doe Updated',
+        }),
+      ).rejects.toThrow(ResourceNotFoundError)
 
-        await expect(() =>
-          updateUserUseCase.execute({
-            publicId: user.publicId,
-            name: 'Jane Doe Updated',
-          }),
-        ).rejects.toThrow(ResourceNotFoundError)
-
-        updateSpy.mockRestore()
-      } catch (error) {
-        console.log('ERROR: ', error)
-        throw error
-      }
-    })
+      updateSpy.mockRestore()
+    } catch (error) {
+      console.log('ERROR: ', error)
+      throw error
+    }
+  })
 
   it('should be able to update', async () => {
     try {
@@ -87,7 +86,7 @@ describe('Update Use Case', () => {
     }
   })
 
-  it("should not be able to proceed if User is not found by publicId", async () => {
+  it('should not be able to proceed if User is not found by publicId', async () => {
     try {
       const usersRepository = new InMemoryUsersRepository()
       const registerUseCase = new RegisterUserUseCase(usersRepository)
@@ -107,13 +106,12 @@ describe('Update Use Case', () => {
         role: UserRole.DEFAULT,
       })
 
-      await expect(() => 
+      await expect(() =>
         updateUserUseCase.execute({
-            publicId: 'non-existing-public-id',
-            name: 'Jane Doe',
-        })
+          publicId: 'non-existing-public-id',
+          name: 'Jane Doe',
+        }),
       ).rejects.toBeInstanceOf(ResourceNotFoundError)
-
     } catch (error) {
       console.log('ERROR: ', error)
       throw error
@@ -155,12 +153,11 @@ describe('Update Use Case', () => {
 
       await expect(() =>
         updateUserUseCase.execute({
-            publicId: user.publicId,
-            name: 'Jane Doe Updated',
-            email: repeatedEmail,
-        })
+          publicId: user.publicId,
+          name: 'Jane Doe Updated',
+          email: repeatedEmail,
+        }),
       ).rejects.toBeInstanceOf(UserAlreadyExistsError)
-
     } catch (error) {
       console.log('ERROR: ', error)
       throw error
@@ -209,7 +206,6 @@ describe('Update Use Case', () => {
           username: repeatedUsername,
         }),
       ).rejects.toBeInstanceOf(UserAlreadyExistsError)
-
     } catch (error) {
       console.log('ERROR: ', error)
       throw error
@@ -246,7 +242,6 @@ describe('Update Use Case', () => {
       ).rejects.toThrow('Error updating user')
 
       updateSpy.mockRestore()
-
     } catch (error) {
       console.log('ERROR: ', error)
       throw error

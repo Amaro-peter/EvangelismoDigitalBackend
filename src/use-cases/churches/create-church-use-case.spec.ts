@@ -133,8 +133,8 @@ describe('Create Church Use Case', () => {
     ).rejects.toBeInstanceOf(ChurchAlreadyExistsError)
   })
 
-  it('should throw ChurchAlreadyExistsError if error message is "church-already-exists"', async () => {
-    const customError = new Error('church-already-exists')
+  it('should throw ChurchAlreadyExistsError if it detects the same error', async () => {
+    const customError = new ChurchAlreadyExistsError()
 
     vi.spyOn(churchesRepository, 'findByName').mockResolvedValueOnce(null)
     vi.spyOn(churchesRepository, 'createChurch').mockRejectedValueOnce(customError)

@@ -1,76 +1,71 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 
 vi.mock('@utils/send-email', () => ({
-    sendEmail: vi.fn(),
+  sendEmail: vi.fn(),
 }))
 
 import { sendEmail } from '@utils/send-email'
 import { SendEmailUseCase } from './send-email'
 
 describe('SendEmailUseCase', () => {
-    afterEach(() => {
-        vi.clearAllMocks()
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('should call sendEmail with correct parameters and return its result', async () => {
+    const mockResult = { message: 'test-id' }
+    ;(sendEmail as any).mockResolvedValueOnce(mockResult)
+
+    const useCase = new SendEmailUseCase()
+    const params = {
+      to: 'test@example.com',
+      subject: 'Test Subject',
+      message: 'This is a test message.',
+      html: '<p>This is a test message.</p>',
+    }
+
+    const result = await useCase.execute(params)
+
+    expect(sendEmail).toHaveBeenCalledWith({
+      ...params,
+      attachments: undefined,
     })
 
-    it('should call sendEmail with correct parameters and return its result', async () => {
-        
-        const mockResult = { message: 'test-id' }
-        ;(sendEmail as any).mockResolvedValueOnce(mockResult)
+    expect(result).toBe(mockResult)
+  })
 
-        const useCase = new SendEmailUseCase()
-        const params = {
-            to: 'test@example.com',
-            subject: 'Test Subject',
-            message: 'This is a test message.',
-            html: '<p>This is a test message.</p>',
-        }
+  it('should propagate errors thrown by sendEmail', async () => {
+    const error = new Error('Send failed')
+    ;(sendEmail as any).mockRejectedValueOnce(error)
 
-        const result = await useCase.execute(params)
+    const useCase = new SendEmailUseCase()
+    const params = {
+      to: 'test@example.com',
+      subject: 'Test Subject',
+      message: 'This is a test message.',
+      html: '<p>This is a test message.</p>',
+    }
 
-        expect(sendEmail).toHaveBeenCalledWith({
-            ...params,
-            attachments: undefined,
-        })
+    await expect(() => useCase.execute(params)).rejects.toThrowError(error)
+  })
 
-        expect(result).toBe(mockResult)
+  it('should call sendEmail with attachments if provided', async () => {
+    const mockResult = { messageId: 'with-attachments' }
+    ;(sendEmail as any).mockResolvedValueOnce(mockResult)
 
-    })
+    const useCase = new SendEmailUseCase()
+    const attachments = [{ filename: 'file.txt', content: 'hello' }]
+    const params = {
+      to: 'attach@example.com',
+      subject: 'With Attachments',
+      message: 'msg',
+      html: '<b>msg</b>',
+      attachments,
+    }
 
-    it('should propagate errors thrown by sendEmail', async () => {
-        const error = new Error('Send failed')
-        ;(sendEmail as any).mockRejectedValueOnce(error)
+    const result = await useCase.execute(params)
 
-        const useCase = new SendEmailUseCase()
-        const params = {
-          to: 'test@example.com',
-          subject: 'Test Subject',
-          message: 'This is a test message.',
-          html: '<p>This is a test message.</p>',
-        }
-
-        await expect(() => 
-            useCase.execute(params)
-        ).rejects.toThrowError(error)
-    })
-
-    it('should call sendEmail with attachments if provided', async () => {
-      const mockResult = { messageId: 'with-attachments' }
-      ;(sendEmail as any).mockResolvedValueOnce(mockResult)
-
-      const useCase = new SendEmailUseCase()
-      const attachments = [{ filename: 'file.txt', content: 'hello' }]
-      const params = {
-        to: 'attach@example.com',
-        subject: 'With Attachments',
-        message: 'msg',
-        html: '<b>msg</b>',
-        attachments,
-      }
-
-      const result = await useCase.execute(params)
-
-      expect(sendEmail).toHaveBeenCalledWith(params)
-      expect(result).toBe(mockResult)
-    })
-
+    expect(sendEmail).toHaveBeenCalledWith(params)
+    expect(result).toBe(mockResult)
+  })
 })

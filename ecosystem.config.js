@@ -5,7 +5,7 @@ module.exports = {
     {
       name: process.env.PROJECT_NAME,
       script: './dist/server.js',
-      cwd: `/home/injunior-infra/dev/projects/${process.env.PROJECT_NAME}`,
+      cwd: `/home/faithtech/create-labs/evangelismo-digital-baackend/${process.env.PROJECT_NAME}`,
       max_memory_restart: '256M',
       node_args: '--env-file=.env',
 

@@ -11,6 +11,7 @@ import fastifyCors from '@fastify/cors'
 import * as Sentry from '@sentry/node'
 import { nodeProfilingIntegration } from '@sentry/profiling-node'
 import { closeAllRedisConnections } from '@lib/redis/clients'
+import { RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
 z.config(z.locales.pt())
 
 export const app = fastify({
@@ -132,7 +133,20 @@ app.setErrorHandler((error, _request, reply) => {
   reply.status(500).send({ message: messages.errors.internalServer, error: error.message })
 })
 
-app.addHook('onClose', async (instance) => {
-  logger.info('🛑 Shutting down Redis connections...')
-  await closeAllRedisConnections()
+app.addHook('onClose', async () => {
+  logger.info('🛑 Shutting down RateLimiter and Redis connections...')
+
+  try {
+    await RedisRateLimiter.destroyInstance()
+    logger.info('✅ RateLimiter destroyed')
+  } catch (error) {
+    logger.error(error, '❌ Error destroying RateLimiter')
+  }
+
+  try {
+    await closeAllRedisConnections()
+    logger.info('✅ Redis connections closed')
+  } catch (error) {
+    logger.error(error, '❌ Error closing Redis connections')
+  }
 })

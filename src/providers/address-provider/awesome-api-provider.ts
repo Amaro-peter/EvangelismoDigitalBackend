@@ -32,10 +32,6 @@ interface AwesomeApiResponse {
 export class AwesomeApiProvider implements AddressProvider {
   private static api: AxiosInstance
 
-  // Configuração Fail-Fast: 5 requisições por segundo dentro do RedisRateLimiter
-  // RATE_LIMIT_MAX = 5
-  // RATE_LIMIT_WINDOW = 1
-
   private readonly MAX_RETRIES = 2
   private readonly BACKOFF_MS = 100
   private readonly TIMEOUT = 1500
@@ -76,8 +72,10 @@ export class AwesomeApiProvider implements AddressProvider {
     const allowed = await rateLimiter.tryConsume(EnumProviderConfig.AWESOME_API_ADDRESS)
 
     if (!allowed) {
-      throw new AddressServiceBusyError('AwesomeAPI (Rate Limit Exceeded)')
+      throw new AddressServiceBusyError('AwesomeAPI (Rate Limit Excedido)')
     }
+
+    let lastError: Error | unknown = undefined
 
     for (let attempt = 1; attempt <= this.MAX_RETRIES; attempt++) {
       if (signal?.aborted) {
@@ -132,10 +130,16 @@ export class AwesomeApiProvider implements AddressProvider {
           return null
         }
 
+        lastError = error
+
         // Check if error is retryable (network issues, 5xx, 429)
         const isRetryable = !err.response || (typeof status === 'number' && (status >= 500 || status === 429))
 
         if (!isRetryable || attempt === this.MAX_RETRIES) {
+          if (status === 429 && attempt === this.MAX_RETRIES) {
+            throw new AddressServiceBusyError('AwesomeAPI (Rate Limit Excedido)')
+          }
+
           logger.error(
             {
               cep: cleanCep,
@@ -148,7 +152,7 @@ export class AwesomeApiProvider implements AddressProvider {
             },
             'Falha ao buscar endereço AwesomeAPI após tentativas',
           )
-          throw new AddressProviderFailureError()
+          throw new AddressProviderFailureError(lastError)
         }
 
         // Backoff and retry for transient errors
@@ -159,8 +163,8 @@ export class AwesomeApiProvider implements AddressProvider {
     }
 
     // This should be unreachable due to retry logic, but as safety net
-    logger.error({ cep: cleanCep }, 'AwesomeAPI: Unexpected code path - all retries exhausted without throw')
-    throw new AddressProviderFailureError()
+    logger.error({ cep: cleanCep }, 'AwesomeAPI - todas as tentativas esgotadas sem sucesso')
+    throw new AddressProviderFailureError(lastError)
   }
 
   private sleep(ms: number): Promise<void> {

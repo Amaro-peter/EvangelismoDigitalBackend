@@ -30,10 +30,6 @@ interface ViaCepResponse {
 export class ViaCepProvider implements AddressProvider {
   private static api: AxiosInstance
 
-  // Configuração Fail-Fast in RedisRateLimiter: 5 requisições por segundo
-  // RATE_LIMIT_MAX = 5
-  // RATE_LIMIT_WINDOW = 1
-
   private readonly MAX_RETRIES = 2
   private readonly BACKOFF_MS = 200
   private readonly VIACEP_TIMEOUT = 3000
@@ -74,8 +70,10 @@ export class ViaCepProvider implements AddressProvider {
     const allowed = await rateLimiter.tryConsume(EnumProviderConfig.VIACEP_ADDRESS)
 
     if (!allowed) {
-      throw new AddressServiceBusyError('ViaCEP (Rate Limit Exceeded)')
+      throw new AddressServiceBusyError('ViaCEP (Rate Limit Excedido)')
     }
+
+    let lastError: Error | unknown = undefined
 
     for (let attempt = 1; attempt <= this.MAX_RETRIES; attempt++) {
       if (signal?.aborted) {
@@ -120,10 +118,16 @@ export class ViaCepProvider implements AddressProvider {
           return null
         }
 
+        lastError = error
+
         // Retry logic para erros de rede, 500 ou 429
         const isRetryable = !err.response || (typeof status === 'number' && (status >= 500 || status === 429))
 
         if (!isRetryable || attempt === this.MAX_RETRIES) {
+          if (status === 429 && attempt === this.MAX_RETRIES) {
+            throw new AddressServiceBusyError('ViaCEP (Rate Limit Excedido)')
+          }
+
           logger.error(
             {
               cep: cleanCep,
@@ -137,7 +141,7 @@ export class ViaCepProvider implements AddressProvider {
             'Falha ao buscar endereço após tentativas (ViaCEP)',
           )
 
-          throw new AddressProviderFailureError()
+          throw new AddressProviderFailureError(lastError)
         }
 
         const delay = this.BACKOFF_MS * Math.pow(2, attempt - 1)
@@ -159,8 +163,8 @@ export class ViaCepProvider implements AddressProvider {
       }
     }
 
-    logger.error({ cep: cleanCep }, 'ViaCEP: Unexpected code path - all retries exhausted without throw')
-    throw new AddressProviderFailureError()
+    logger.error({ cep: cleanCep }, 'ViaCEP - todas as tentativas esgotadas sem sucesso')
+    throw new AddressProviderFailureError(lastError)
   }
 
   private sleep(ms: number): Promise<void> {

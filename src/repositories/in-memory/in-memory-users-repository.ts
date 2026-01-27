@@ -1,6 +1,11 @@
-import { User } from "@prisma/client";
-import { CreateUser, FindByToken, UserPasswordUpdateInput, UsersRepository, UserWhereUniqueInput } from "@repositories/users-repository";
-
+import { User } from '@prisma/client'
+import {
+  CreateUser,
+  FindByToken,
+  UserPasswordUpdateInput,
+  UsersRepository,
+  UserWhereUniqueInput,
+} from '@repositories/users-repository'
 
 export class InMemoryUsersRepository implements UsersRepository {
   public items: User[] = []
@@ -36,26 +41,38 @@ export class InMemoryUsersRepository implements UsersRepository {
 
   async create(data: CreateUser): Promise<User> {
     const now = new Date()
-    const user = {
+
+    const userData = data as unknown as {
+      publicId?: string
+      name: string
+      email: string
+      username: string
+      passwordHash: string
+      cpf: string
+      loginAttempts?: number
+      lastLogin?: Date | string | null
+      role?: 'DEFAULT' | 'ADMIN'
+      tokenExpiresAt?: Date | string | null
+      passwordChangedAt?: Date | string | null
+    }
+
+    const user: User = {
       id: this.items.length + 1,
-      publicId: (data as any).publicId || crypto.randomUUID(),
-      name: (data as any).name,
-      email: (data as any).email,
-      username: (data as any).username,
-      passwordHash: (data as any).passwordHash,
-      photo: (data as any).photo ?? null,
-      cpf: (data as any).cpf,
-      loginAttempts: (data as any).loginAttempts ?? 0,
-      lastLogin: (data as any).lastLogin ? new Date((data as any).lastLogin as any) : null,
-      role: (data as any).role ?? 'DEFAULT',
-      resetToken: null,
-      resetExpiresAt: null,
+      publicId: userData.publicId || crypto.randomUUID(),
+      name: userData.name,
+      email: userData.email,
+      username: userData.username,
+      passwordHash: userData.passwordHash,
+      cpf: userData.cpf,
+      loginAttempts: userData.loginAttempts ?? 0,
+      lastLogin: userData.lastLogin ? new Date(userData.lastLogin as string | Date) : null,
+      role: (userData.role as 'DEFAULT' | 'ADMIN') ?? 'DEFAULT',
       token: null,
-      tokenExpiresAt: (data as any).tokenExpiresAt ? new Date((data as any).tokenExpiresAt as any) : null,
+      tokenExpiresAt: userData.tokenExpiresAt ? new Date(userData.tokenExpiresAt as string | Date) : null,
       createdAt: now,
       updatedAt: now,
-      passwordChangedAt: (data as any).passwordChangedAt ? new Date((data as any).passwordChangedAt as any) : null,
-    } as any as User
+      passwordChangedAt: userData.passwordChangedAt ? new Date(userData.passwordChangedAt as string | Date) : null,
+    }
 
     this.items.push(user)
     return user
@@ -74,7 +91,7 @@ export class InMemoryUsersRepository implements UsersRepository {
     return deletedUser
   }
 
-  async update(publicId: string, data: { name: string, email: string, username: string }): Promise<User | null> {
+  async update(publicId: string, data: { name: string; email: string; username: string }): Promise<User | null> {
     const userIndex = this.items.findIndex((item) => item.publicId === publicId)
     if (userIndex === -1) {
       return null

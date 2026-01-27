@@ -32,7 +32,7 @@ async function sendRequest(index: number) {
     }
   } catch (err: unknown) {
     console.error(`❌ Req ${index} erro: ` + err)
-    return { status: 'error', duration: Date.now() - start}
+    return { status: 'error', duration: Date.now() - start }
   }
 }
 

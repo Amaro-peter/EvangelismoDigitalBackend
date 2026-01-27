@@ -44,7 +44,6 @@ vi.mock('@lib/redis/helper/resilient-cache', () => {
   return {
     // Return a real class so 'new ResilientCache()' works
     ResilientCache: class ResilientCacheMock {
-      constructor() {}
       // Delegate calls to the global spy functions
       getOrFetch(...args: any[]) {
         return mockGetOrFetch(...args)

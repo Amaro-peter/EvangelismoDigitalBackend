@@ -181,18 +181,37 @@ describe('RedisRateLimiter Unit Tests', () => {
   })
 
   describe('destroy', () => {
-    it('should clear limiters map', async () => {
+    it('should clear limiters map and reset singleton instance', async () => {
       const limiter = RedisRateLimiter.getInstance(redisClient) as any
 
       // Adiciona um limiter
+      mockConsume.mockResolvedValue({})
       await limiter.tryConsume(EnumProviderConfig.VIACEP_ADDRESS)
       expect(limiter.limiters.size).toBeGreaterThan(0)
 
-      // Destrói
-      await limiter.destroy()
+      // Destrói usando o método estático
+      await RedisRateLimiter.destroyInstance()
 
+      // Verifica se o mapa foi limpo
       expect(limiter.limiters.size).toBe(0)
-      expect(mockRedisQuit).toHaveBeenCalled()
+
+      // Verifica se a instância singleton foi resetada
+      expect((RedisRateLimiter as any).instance).toBeNull()
+
+      // Verifica se o logger foi chamado para cada provider
+      expect(logger.debug).toHaveBeenCalledWith(
+        { provider: EnumProviderConfig.VIACEP_ADDRESS },
+        'Clearing rate limiter instance',
+      )
+    })
+
+    it('should not throw error when destroying non-existent instance', async () => {
+      // Garante que não há instância
+      ;(RedisRateLimiter as any).instance = null
+
+      await expect(RedisRateLimiter.destroyInstance()).resolves.not.toThrow()
+
+      expect(logger.debug).toHaveBeenCalledWith('No RateLimiter instance to destroy')
     })
   })
 })

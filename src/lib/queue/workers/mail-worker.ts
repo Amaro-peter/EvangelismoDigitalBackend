@@ -1,7 +1,7 @@
 import { Worker } from 'bullmq'
 import { MAIL_QUEUE_NAME } from '../mail-queue'
 import { makeSendEmailUseCase } from '@use-cases/factories/make-send-email-use-case'
-import { createRedisBullMQConnection, attachRedisLogger } from '@lib/redis/redis-bullMQ-connection'
+import { attachRedisLogger } from '@lib/redis/redis-bullMQ-connection'
 import { logger } from '@lib/logger'
 import { redisQueue } from '@lib/redis/clients'
 

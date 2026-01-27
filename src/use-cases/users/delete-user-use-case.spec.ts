@@ -5,7 +5,6 @@ import { UserRole } from '@repositories/users-repository'
 import { cpf as cpfValidator } from 'cpf-cnpj-validator'
 import { DeleteUserUseCase } from './delete-user'
 import { ResourceNotFoundError } from '@use-cases/errors/resource-not-found-error'
-import { User } from '@prisma/client'
 
 describe('Delete User Use Case', () => {
   it('should throw ResourceNotFoundError if user does not exist', async () => {

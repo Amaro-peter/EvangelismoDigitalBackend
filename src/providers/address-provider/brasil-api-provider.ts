@@ -70,8 +70,10 @@ export class BrasilApiProvider implements AddressProvider {
 
     if (!allowed) {
       // Lança erro específico para que o balneador de carga possa tentar outro provider se necessário
-      throw new AddressServiceBusyError('BrasilAPI (Rate Limit Exceeded)')
+      throw new AddressServiceBusyError('BrasilAPI (Rate Limit Excedido)')
     }
+
+    let lastError: Error | unknown = undefined
 
     // 2. Lógica de Retry com Backoff
     for (let attempt = 1; attempt <= this.MAX_RETRIES; attempt++) {
@@ -125,11 +127,17 @@ export class BrasilApiProvider implements AddressProvider {
           return null
         }
 
+        lastError = error
+
         // Verifica erros retryable (5xx, 429 ou erro de rede)
         const isRetryable = !err.response || (typeof status === 'number' && (status >= 500 || status === 429))
 
         // Se não for retryable ou se esgotou as tentativas, falha.
         if (!isRetryable || attempt === this.MAX_RETRIES) {
+          if (status === 429 && attempt === this.MAX_RETRIES) {
+            throw new AddressServiceBusyError('BrasilAPI (Rate Limit Excedido)')
+          }
+
           logger.error(
             {
               cep: cleanCep,
@@ -141,7 +149,7 @@ export class BrasilApiProvider implements AddressProvider {
             },
             'Falha ao buscar endereço BrasilAPI após tentativas',
           )
-          throw new AddressProviderFailureError()
+          throw new AddressProviderFailureError(lastError)
         }
 
         // Backoff Exponencial
@@ -152,8 +160,8 @@ export class BrasilApiProvider implements AddressProvider {
     }
 
     // Fallback de segurança (código inalcançável teoricamente)
-    logger.error({ cep: cleanCep }, 'BrasilAPI: Unexpected code path')
-    throw new AddressProviderFailureError()
+    logger.error({ cep: cleanCep }, 'BrasilAPI - todas as tentativas esgotadas sem sucesso')
+    throw new AddressProviderFailureError(lastError)
   }
 
   private sleep(ms: number): Promise<void> {

@@ -1,13 +1,12 @@
 import { AxiosInstance, AxiosError } from 'axios'
 import { Redis } from 'ioredis'
-import { GeocodingProvider, GeoCoordinates, GeoSearchOptions, GeoPrecision } from './geo-provider.interface'
+import { GeocodingProvider, GeoCoordinates, GeoSearchOptions } from './geo-provider.interface'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { createHttpClient } from '@lib/http/axios'
 import { logger } from '@lib/logger'
 import { EnumProviderConfig, RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
 import { PrecisionHelper } from 'providers/helpers/precision-helper'
 import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
-import { LocationIqProviderError } from './error/location-iq-error'
 import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
 
 export interface LocationIqConfig {
@@ -81,7 +80,7 @@ export class LocationIqProvider implements GeocodingProvider {
     )
   }
 
-  private async performRequest(params: Record<string, any>, signal?: AbortSignal): Promise<GeoCoordinates | null> {
+  private async performRequest(params: Record<string, unknown>, signal?: AbortSignal): Promise<GeoCoordinates | null> {
     let lastError: Error | unknown = undefined
 
     for (let attempt = 1; attempt <= this.MAX_ATTEMPTS; attempt++) {
@@ -94,7 +93,7 @@ export class LocationIqProvider implements GeocodingProvider {
       const allowed = await rateLimiter.tryConsume(EnumProviderConfig.LOCATION_IQ_GEOCODING)
 
       if (!allowed) {
-        throw new GeoServiceBusyError('LocationIQ (Rate Limit Exceeded)')
+        throw new GeoServiceBusyError('LocationIQ (Rate Limit Excedido)')
       }
 
       try {
@@ -104,7 +103,6 @@ export class LocationIqProvider implements GeocodingProvider {
         })
 
         if (!response.data || response.data.length === 0) {
-          // Not found - return null so ResilientGeoProvider can try next provider
           return null
         }
 
@@ -139,6 +137,10 @@ export class LocationIqProvider implements GeocodingProvider {
         const isRetryable = !err.response || (status && (status >= 500 || status === 429))
 
         if (!isRetryable || attempt === this.MAX_ATTEMPTS) {
+          if (status === 429 && attempt === this.MAX_ATTEMPTS) {
+            throw new GeoServiceBusyError('LocationIQ (Rate Limit Excedido)')
+          }
+
           logger.warn(
             {
               code: err.code,
@@ -146,9 +148,9 @@ export class LocationIqProvider implements GeocodingProvider {
               url: err.config?.url,
               method: err.config?.method,
             },
-            'LocationIQ Provider Failed',
+            'Provedor LocationIQ falhou ao buscar coordenadas',
           )
-          throw new GeoProviderFailureError()
+          throw new GeoProviderFailureError(lastError)
         }
 
         // Backoff apenas para erros de rede/servidor instável
@@ -159,7 +161,7 @@ export class LocationIqProvider implements GeocodingProvider {
 
     // This should be unreachable, but as a safety net, throw last error or generic error
     //logger.error({ lastError }, 'LocationIQ: Unexpected code path - all attempts exhausted without throw')
-    throw new GeoProviderFailureError()
+    throw new GeoProviderFailureError(lastError)
   }
 
   private sleep(ms: number): Promise<void> {

@@ -9,9 +9,5 @@ export const redisRateLimit = createRedisRateLimiterConnection()
 export const redisQueue = createRedisBullMQConnection()
 
 export async function closeAllRedisConnections() {
-  await Promise.all([
-    redisCache.quit(),
-    redisRateLimit.quit(),
-    redisQueue.quit(),
-  ])
+  await Promise.all([redisCache.quit(), redisRateLimit.quit(), redisQueue.quit()])
 }

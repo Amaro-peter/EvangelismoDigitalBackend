@@ -95,7 +95,7 @@ export class CepToLatLonUseCase {
           throw new CoordinatesNotFoundError()
         }
         // This shouldn't happen, but fallback to generic error
-        logger.error({ cep: cleanCep, cachedError: error }, 'Unexpected cached error type')
+        logger.error({ cep: cleanCep, cachedError: error }, 'Tipo de erro em cache inesperado no CepToLatLonUseCase')
         throw new CepToLatLonError()
       }
 
@@ -109,14 +109,10 @@ export class CepToLatLonUseCase {
       }
 
       if (error instanceof GeoServiceBusyError) {
-        const isRateLimit = error instanceof GeoServiceBusyError
-        logger.error({ cep: cleanCep, error, isRateLimit }, 'Critical failure in CepToLatLonUseCase (System Fail)')
         throw error
       }
 
       if (error instanceof AddressServiceBusyError) {
-        const isRateLimit = error instanceof AddressServiceBusyError
-        logger.error({ cep: cleanCep, error, isRateLimit }, 'Critical failure in CepToLatLonUseCase (System Fail)')
         throw error
       }
 
@@ -129,12 +125,10 @@ export class CepToLatLonUseCase {
       }
 
       if (error instanceof TimeoutExceededOnFetchError) {
-        logger.warn({ cep: cleanCep }, 'Operation timed out. Bubbling up.')
         throw error
       }
 
       if (error instanceof ServiceOverloadError) {
-        logger.warn({ cep: cleanCep }, 'Service overload (Circuit Breaker). Bubbling up.')
         throw error
       }
 
@@ -171,8 +165,6 @@ export class CepToLatLonUseCase {
       if (error instanceof InvalidCepError) {
         throw error
       }
-
-      logger.error({ cep: cleanCep, error }, 'Critical: Address Providers could not find address. System error.')
       throw error
     }
 
@@ -216,7 +208,7 @@ export class CepToLatLonUseCase {
 
         logger.error(
           { cep: cleanCep, city: localidade, error },
-          'Critical: Geocoder could not find city. System error.',
+          'Crítico: Falha ao buscar coordenadas da cidade no geocoding provider',
         )
         throw error
       }
@@ -225,7 +217,7 @@ export class CepToLatLonUseCase {
     // 4. PARANOID GUARD
     // We found the address data (text) but Geocoders failed to find even the city.
     // This implies a provider failure or data inconsistency.
-    logger.error({ cep: cleanCep, city: localidade }, 'Critical: Geocoder could not find city. System error.')
+    logger.error({ cep: cleanCep, city: localidade }, 'Crítico: Geocoding Provider não encontrou a cidade.')
 
     // This is a system error - won't be cached
     throw new CepToLatLonError()

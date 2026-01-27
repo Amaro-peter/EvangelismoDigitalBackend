@@ -59,7 +59,7 @@ interface ValhallaResponse {
    Main Class
 ======================= */
 
-export class FindTheNearestChurchUseCase{
+export class FindTheNearestChurchUseCase {
   async findNearest({ churches, user }: FindNearestProps): Promise<NearbyChurch> {
     if (!churches.length) {
       throw new Error('Lista de igrejas vazia!')
@@ -80,15 +80,11 @@ export class FindTheNearestChurchUseCase{
     }
 
     const valhallaUrl = 'http://host.docker.internal:8002'
-    const response: AxiosResponse<ValhallaResponse> = await axios.post(
-      `${valhallaUrl}/sources_to_targets`,
-      payload,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-        },
+    const response: AxiosResponse<ValhallaResponse> = await axios.post(`${valhallaUrl}/sources_to_targets`, payload, {
+      headers: {
+        'Content-Type': 'application/json',
       },
-    )
+    })
 
     /**
      * Matrix layout:
