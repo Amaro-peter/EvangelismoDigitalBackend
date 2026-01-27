@@ -1,12 +1,14 @@
 import { cepSchema } from '@http/schemas/utils/cep'
 import { ChurchPresenter } from '@http/presenters/church-presenter'
 import { logger } from '@lib/logger'
+import { User } from '@use-cases/churches/find-the-nearest-church'
 import { LatitudeRangeError } from '@use-cases/errors/latitude-range-error'
 import { LongitudeRangeError } from '@use-cases/errors/longitude-range-error'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-found-error'
 import { makeCepToLatLonUseCase } from '@use-cases/factories/make-cep-to-lat-lon-use-case'
 import { makeFindNearestChurchesUseCase } from '@use-cases/factories/make-find-nearest-churches-use-case'
+import { makeFindTheNearestChurchesUseCase } from '@use-cases/factories/make-find-the-nearest-church'
 import { FastifyReply, FastifyRequest } from 'fastify'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { AddressServiceBusyError } from '@use-cases/errors/address-service-busy-error'
@@ -48,6 +50,15 @@ export async function findNearestChurches(
       userLon: userLon,
     })
 
+    const findTheNearestChurchesUseCase = makeFindTheNearestChurchesUseCase()
+
+    const user: User = { userLat, userLon }
+    const nearbyChurch = await findTheNearestChurchesUseCase.findNearest({ churches, user })
+    logger.info({
+      msg: 'Igreja mais próxima encontrada com sucesso',
+      nearbyChurch,
+    })
+
     if (process.env.NODE_ENV !== 'production' || Math.random() < 0.1) {
       logger.info({
         msg: 'Igrejas mais próximas encontradas com sucesso',
@@ -57,7 +68,10 @@ export async function findNearestChurches(
 
     const sanitizedChurches = ChurchPresenter.toHTTP(churches)
 
-    return reply.status(200).send({ churches: sanitizedChurches, totalFound, precision, providerName })
+    return reply
+      .status(200)
+      .send({ nearbyChurchInfo: nearbyChurch, churches: sanitizedChurches, totalFound, precision, providerName })
+
   } catch (error) {
     // 1. Erros de Negócio (Bad Request - 400)
     if (error instanceof LatitudeRangeError || error instanceof LongitudeRangeError) {
