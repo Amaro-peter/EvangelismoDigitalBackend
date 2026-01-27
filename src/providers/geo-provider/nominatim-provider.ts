@@ -18,10 +18,6 @@ type NominatimSearchParams = Record<string, string | number | undefined>
 export class NominatimGeoProvider implements GeocodingProvider {
   private static api: AxiosInstance
 
-  // Fail-Fast Configuration in RedisRateLimiter: 1 request per second max
-  // RATE_LIMIT_MAX = 1
-  // RATE_LIMIT_WINDOW = 1
-
   // Nominatim API Timeout
   private readonly NOMINATIM_TIMEOUT = 4000
 
@@ -71,17 +67,19 @@ export class NominatimGeoProvider implements GeocodingProvider {
   }
 
   private async performRequest(params: NominatimSearchParams, signal?: AbortSignal): Promise<GeoCoordinates | null> {
-    // 1. Fail-Fast Rate Limit Check
-    // If limit is exceeded, we throw immediately so ResilientGeoProvider switches to next provider.
-    const rateLimiter = RedisRateLimiter.getInstance(this.redisRateLimiterConnection)
-
-    const allowed = await rateLimiter.tryConsume(EnumProviderConfig.NOMINATIM_GEOCODING)
-
-    if (!allowed) {
-      throw new GeoServiceBusyError('Nominatim (Rate Limit Exceeded)')
-    }
-
     try {
+      if (signal?.aborted) {
+        throw signal.reason
+      }
+
+      const rateLimiter = RedisRateLimiter.getInstance(this.redisRateLimiterConnection)
+
+      const allowed = await rateLimiter.tryConsume(EnumProviderConfig.NOMINATIM_GEOCODING)
+
+      if (!allowed) {
+        throw new GeoServiceBusyError('Nominatim (Rate Limit Excedido)')
+      }
+
       const cleanParams = this.cleanParams(params)
 
       const response = await NominatimGeoProvider.api.get<any[]>('/search', {
@@ -90,7 +88,6 @@ export class NominatimGeoProvider implements GeocodingProvider {
       })
 
       if (!response.data || response.data.length === 0) {
-        // Not found - return null so ResilientGeoProvider can try next provider
         return null
       }
 
@@ -106,6 +103,10 @@ export class NominatimGeoProvider implements GeocodingProvider {
         throw new TimeoutExceededOnFetchError(signal.reason)
       }
 
+      if (error instanceof GeoServiceBusyError) {
+        throw error
+      }
+
       const err = error as AxiosError
       const status = err.response?.status
 
@@ -116,8 +117,7 @@ export class NominatimGeoProvider implements GeocodingProvider {
 
       // API rate limit (429) - throw so ResilientGeoProvider tries next provider
       if (status === 429) {
-        logger.warn('Nominatim Rate Limit Hit (429 from API)')
-        throw new GeoServiceBusyError('Nominatim (API Rate Limit)')
+        throw new GeoServiceBusyError('Nominatim (Rate Limit Excedido)')
       }
 
       // Other errors (network, 500, etc.) - throw as system errors
@@ -128,7 +128,7 @@ export class NominatimGeoProvider implements GeocodingProvider {
           url: err.config?.url,
           method: err.config?.method,
         },
-        'Nominatim Provider Failed',
+        'Provedor Nominatim falhou ao buscar coordenadas',
       )
       throw new GeoProviderFailureError()
     }

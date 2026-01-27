@@ -29,18 +29,16 @@ export const messages = {
     formSubmissionFailed: 'Falha ao enviar o formulário.',
     createChurchFailed: 'Falha ao criar a igreja.',
     createUserFailed: 'Falha ao criar o usuário.',
-    geoProviderFailureError: `Não foi possível localizar igrejas próximas agora. Verifique o CEP ou tente novamente mais tarde. Estamos trabalhando para normalizar o serviço.`,
-    serviceOverloadError: 'Serviço sobrecarregado - tente novamente mais tarde',
-    timeoutExceededOnFetch: 'Tempo limite excedido ao buscar dados externo.',
+    geoProviderFailureError: `Falha de sistema ao tentar obter coordendas do provedor de serviços.`,
+    serviceOverloadError:
+      'Número de requisições simultâneas excedeu o limite de maxPendingFetches na memória cache do Redis.',
+    timeoutExceededOnFetch: 'Tempo limite excedido ao buscar dados nos provedores externos.',
     noGeoProviderError:
       'Provedor resiliente de geolocalização requer pelo menos um provedor de geolocalização configurado.',
     noAddressProviderError: 'Provedor resiliente de endereço requer pelo menos um provedor de endereço configurado.',
     operationAbortedError: 'Operação abortada pelo cache manager devido a timeout ou cancelamento.',
-    addressProviderFailureError: 'Falha ao obter o endereço a partir do provedor de endereços.',
-    locationIqProviderError: 'Erro ao comunicar com o provedor LocationIQ.',
-    viaCepProviderError: 'Erro ao comunicar com o provedor ViaCep.',
-    cepToLatLonError:
-      'Não foi possível localizar igrejas próximas agora. Verifique o CEP ou tente novamente mais tarde. Estamos trabalhando para normalizar o serviço.',
+    addressProviderFailureError: 'Falha de sistema ao tentar obter endereço do provedor de serviços.',
+    cepToLatLonError: 'Falha de sistema ao tentar converter CEP para coordenadas.',
     noRateLimiterSetError: 'Nenhum rate limiter foi configurado para este provedor.',
   },
   info: {

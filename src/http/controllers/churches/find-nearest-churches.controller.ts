@@ -79,12 +79,12 @@ export async function findNearestChurches(
       return reply.status(400).send({ message: error.message })
     }
 
+    // 2. Erro de Recurso Não Encontrado (Not Found - 404)
     if (error instanceof InvalidCepError) {
       logger.warn({ msg: 'CEP inválido fornecido', cep: request.query.cep })
-      return reply.status(400).send({ message: error.message })
+      return reply.status(404).send({ message: error.message })
     }
 
-    // 2. Erro de Recurso Não Encontrado (Not Found - 404)
     if (error instanceof CoordinatesNotFoundError) {
       logger.info({ msg: 'Coordenadas não encontradas para o CEP', cep: request.query.cep })
       return reply.status(404).send({ message: error.message })
@@ -92,31 +92,33 @@ export async function findNearestChurches(
 
     // 3. Erros de Rate Limit (Too Many Requests - 429)
     // Quando nossos providers ou o rate limiter interno bloqueiam
-    if (error instanceof GeoServiceBusyError || error instanceof AddressServiceBusyError) {
-      logger.warn({ msg: 'Serviço ocupado (Rate Limit)', error: error.message })
-      return reply.status(429).send({ message: 'Service busy, please try again later.' })
+    if (
+      error instanceof GeoServiceBusyError ||
+      error instanceof AddressServiceBusyError ||
+      error instanceof ServiceOverloadError
+    ) {
+      logger.warn({
+        msg: 'Serviço ocupado (Rate Limit) ou capacidade máxima de maxPendingFetches atingida',
+        error: error.message,
+      })
+      return reply.status(429).send({ message: 'Serviço ocupado, por favor tente novamente mais tarde.' })
     }
 
     // 4. Erros de Sistema / Indisponibilidade (Service Unavailable - 503)
     // Timeouts, Circuit Breaker aberto ou falha de conexão com provider
     if (
       error instanceof TimeoutExceededOnFetchError ||
-      error instanceof ServiceOverloadError ||
       error instanceof AddressProviderFailureError ||
       error instanceof GeoProviderFailureError ||
       error instanceof CepToLatLonError
     ) {
       logger.error({ msg: 'Falha temporária nos provedores externos', error: error.message })
-      return reply.status(503).send({ message: 'Serviço temporariamente indisponível.' })
+      return reply.status(503).send({
+        message:
+          'Não foi possível localizar igrejas próximas agora. Verifique o CEP ou tente novamente mais tarde. Estamos trabalhando para normalizar o serviço.',
+      })
     }
 
-    // 5. Erros Inesperados (Internal Server Error - 500)
-    // Sanitizamos o objeto error para não logar AxiosError completo
-    logger.error({
-      msg: 'Erro inesperado em findNearestChurches',
-      errorMessage: error instanceof Error ? error.message : 'Unknown error',
-    })
-
-    return reply.status(500).send({ message: 'Internal Server Error' })
+    throw error
   }
 }

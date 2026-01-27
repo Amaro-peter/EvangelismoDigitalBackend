@@ -176,8 +176,26 @@ export class RedisRateLimiter {
     }
   }
 
-  async destroy(): Promise<void> {
-    await this.redis.quit()
+  static async destroyInstance() {
+    if (!this.instance) {
+      logger.debug('No RateLimiter instance to destroy')
+      return
+    }
+
+    await this.instance.destroyRateLimiterMap()
+
+    this.instance = undefined as any
+  }
+
+  private async destroyRateLimiterMap() {
+    for (const [provider, limiter] of this.limiters.entries()) {
+      try {
+        logger.debug({ provider }, 'Clearing rate limiter instance')
+      } catch (error) {
+        logger.error({ error, provider }, 'Error clearing rate limiter')
+      }
+    }
+
     this.limiters.clear()
   }
 }

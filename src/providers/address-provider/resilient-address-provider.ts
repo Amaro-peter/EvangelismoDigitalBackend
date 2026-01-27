@@ -69,7 +69,7 @@ export class ResilientAddressProvider implements AddressProvider {
           throw new InvalidCepError()
         }
         // Unexpected cached error type
-        logger.error({ cep: cleanCep, cachedError: error }, 'Unexpected cached error type in address fetch')
+        logger.error({ cep: cleanCep, cachedError: error }, 'Tipo de erro em cache inesperado no ResilientAddressProvider')
         throw new AddressProviderFailureError()
       }
 
@@ -161,10 +161,6 @@ export class ResilientAddressProvider implements AddressProvider {
     }
 
     // This should be unreachable, but as safety net
-    logger.error(
-      { cep, notFoundCount, totalProviders: this.providers.length },
-      'Unexpected code path: partial not-found without system errors',
-    )
     throw new AddressProviderFailureError()
   }
 }
