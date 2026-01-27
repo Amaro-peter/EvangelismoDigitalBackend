@@ -75,6 +75,8 @@ export class AwesomeApiProvider implements AddressProvider {
       throw new AddressServiceBusyError('AwesomeAPI (Rate Limit Excedido)')
     }
 
+    let lastError: Error | unknown = undefined
+
     for (let attempt = 1; attempt <= this.MAX_RETRIES; attempt++) {
       if (signal?.aborted) {
         throw signal.reason
@@ -128,6 +130,8 @@ export class AwesomeApiProvider implements AddressProvider {
           return null
         }
 
+        lastError = error
+
         // Check if error is retryable (network issues, 5xx, 429)
         const isRetryable = !err.response || (typeof status === 'number' && (status >= 500 || status === 429))
 
@@ -148,7 +152,7 @@ export class AwesomeApiProvider implements AddressProvider {
             },
             'Falha ao buscar endereço AwesomeAPI após tentativas',
           )
-          throw new AddressProviderFailureError()
+          throw new AddressProviderFailureError(lastError)
         }
 
         // Backoff and retry for transient errors
@@ -160,7 +164,7 @@ export class AwesomeApiProvider implements AddressProvider {
 
     // This should be unreachable due to retry logic, but as safety net
     logger.error({ cep: cleanCep }, 'AwesomeAPI - todas as tentativas esgotadas sem sucesso')
-    throw new AddressProviderFailureError()
+    throw new AddressProviderFailureError(lastError)
   }
 
   private sleep(ms: number): Promise<void> {

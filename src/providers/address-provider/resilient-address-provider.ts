@@ -69,7 +69,10 @@ export class ResilientAddressProvider implements AddressProvider {
           throw new InvalidCepError()
         }
         // Unexpected cached error type
-        logger.error({ cep: cleanCep, cachedError: error }, 'Tipo de erro em cache inesperado no ResilientAddressProvider')
+        logger.error(
+          { cep: cleanCep, cachedError: error },
+          'Tipo de erro em cache inesperado no ResilientAddressProvider',
+        )
         throw new AddressProviderFailureError()
       }
 

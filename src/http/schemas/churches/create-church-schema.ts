@@ -1,4 +1,4 @@
-import z from "zod";
+import z from 'zod'
 
 export const createChurchBodySchema = z.object({
   name: z
@@ -14,4 +14,3 @@ export const createChurchBodySchema = z.object({
 })
 
 export type createChurchBodySchema = z.infer<typeof createChurchBodySchema>
-

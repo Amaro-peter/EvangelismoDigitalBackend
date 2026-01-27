@@ -33,13 +33,12 @@ describe('Reset Password Use Case', () => {
         email: uniqueEmail,
       })
 
-      await expect(() => resetPasswordUseCase.execute({ 
-        token: 'some-token', 
-        password: 'newPassword123!' 
-      })).rejects.toBeInstanceOf(
-        InvalidTokenError,
-      )
-
+      await expect(() =>
+        resetPasswordUseCase.execute({
+          token: 'some-token',
+          password: 'newPassword123!',
+        }),
+      ).rejects.toBeInstanceOf(InvalidTokenError)
     } catch (error) {
       console.log('ERROR: ', error)
       throw error
@@ -66,7 +65,7 @@ describe('Reset Password Use Case', () => {
         role: UserRole.DEFAULT,
       })
 
-      const {token, user} = await forgotPasswordUseCase.execute({
+      const { token, user } = await forgotPasswordUseCase.execute({
         email: uniqueEmail,
       })
 
@@ -80,7 +79,6 @@ describe('Reset Password Use Case', () => {
           password: 'newPassword123!',
         }),
       ).rejects.toBeInstanceOf(InvalidTokenError)
-
     } catch (error) {
       console.log('ERROR: ', error)
       throw error
@@ -121,14 +119,13 @@ describe('Reset Password Use Case', () => {
           password: 'newPassword123!',
         }),
       ).rejects.toBeInstanceOf(InvalidTokenError)
-
     } catch (error) {
       console.log('ERROR: ', error)
       throw error
     }
   })
 
-  it("should reset user password", async () => {
+  it('should reset user password', async () => {
     try {
       const usersRepository = new InMemoryUsersRepository()
       const registerUseCase = new RegisterUserUseCase(usersRepository)
@@ -161,7 +158,7 @@ describe('Reset Password Use Case', () => {
 
       const after = Date.now()
 
-      if(user.passwordChangedAt && user.updatedAt) {
+      if (user.passwordChangedAt && user.updatedAt) {
         const passWordChangedAt = new Date(user.passwordChangedAt).getTime()
 
         expect(passWordChangedAt).toBeGreaterThanOrEqual(before)
@@ -171,7 +168,6 @@ describe('Reset Password Use Case', () => {
 
         expect(updatedAt).toBeGreaterThanOrEqual(before)
         expect(updatedAt).toBeLessThanOrEqual(after)
-
       } else {
         throw new Error('passwordChangedAt is not set')
       }
@@ -182,13 +178,12 @@ describe('Reset Password Use Case', () => {
 
       expect(user.token).toBeNull()
       expect(user.tokenExpiresAt).toBeNull()
-
     } catch (error) {
       console.log('ERROR: ', error)
       throw error
     }
   })
-   
+
   it('should throw Error when user password is not updated', async () => {
     try {
       const usersRepository = new InMemoryUsersRepository()
@@ -209,21 +204,20 @@ describe('Reset Password Use Case', () => {
         role: UserRole.DEFAULT,
       })
 
-        const { token } = await forgotPasswordUseCase.execute({
+      const { token } = await forgotPasswordUseCase.execute({
         email: uniqueEmail,
-        })
+      })
 
-        const resetSpy = vi.spyOn(usersRepository, 'updatePassword').mockReturnValueOnce(null as any)
+      const resetSpy = vi.spyOn(usersRepository, 'updatePassword').mockReturnValueOnce(null as any)
 
-        await expect(() =>
-            resetPasswordUseCase.execute({
-                token,
-                password: 'newPassword123!',
-            })
-        ).rejects.toThrowError('Failed to update user')
+      await expect(() =>
+        resetPasswordUseCase.execute({
+          token,
+          password: 'newPassword123!',
+        }),
+      ).rejects.toThrowError('Failed to update user')
 
-        resetSpy.mockRestore()
-
+      resetSpy.mockRestore()
     } catch (error) {
       console.log('ERROR: ', error)
       throw error

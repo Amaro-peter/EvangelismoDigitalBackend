@@ -1,6 +1,6 @@
 import z from 'zod'
 
-const publicIdDeleteChurchSchema = z.uuid();
+const publicIdDeleteChurchSchema = z.uuid()
 
 export const deleteChurchBodySchema = z.object({
   publicId: publicIdDeleteChurchSchema,

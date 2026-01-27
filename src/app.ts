@@ -133,7 +133,7 @@ app.setErrorHandler((error, _request, reply) => {
   reply.status(500).send({ message: messages.errors.internalServer, error: error.message })
 })
 
-app.addHook('onClose', async (instance) => {
+app.addHook('onClose', async () => {
   logger.info('🛑 Shutting down RateLimiter and Redis connections...')
 
   try {

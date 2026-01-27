@@ -37,7 +37,6 @@ describe('Get User Profile Use Case', () => {
       ).rejects.toBeInstanceOf(ResourceNotFoundError)
 
       findSpy.mockRestore()
-
     } catch (error) {
       console.log('ERROR: ', error)
       throw error
@@ -70,7 +69,6 @@ describe('Get User Profile Use Case', () => {
       })
 
       expect(userProfile).toBe(user)
-
     } catch (error) {
       console.log('ERROR: ', error)
       throw error
@@ -110,11 +108,10 @@ describe('Get User Profile Use Case', () => {
       })
 
       expect(userProfile1).not.toBe(userProfile2)
-    
+
       expect(userProfile1?.publicId).toBe(user1.user.publicId)
 
       expect(userProfile2?.publicId).toBe(user2.user.publicId)
-
     } catch (error) {
       console.log('ERROR: ', error)
       throw error
@@ -131,7 +128,6 @@ describe('Get User Profile Use Case', () => {
           publicId: 'non-existent-public-id',
         }),
       ).rejects.toBeInstanceOf(ResourceNotFoundError)
-
     } catch (error) {
       console.log('ERROR: ', error)
       throw error

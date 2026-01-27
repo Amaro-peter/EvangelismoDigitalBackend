@@ -17,7 +17,7 @@ describe('Forgot Password Use Case', () => {
       const uniqueCpf = cpfValidator.generate()
       const password = 'Teste123x!'
 
-       await registerUseCase.execute({
+      await registerUseCase.execute({
         name: 'John Doe',
         email: uniqueEmail,
         cpf: uniqueCpf,
@@ -28,19 +28,18 @@ describe('Forgot Password Use Case', () => {
 
       const findSpy = vi.spyOn(usersRepository, 'findBy').mockReturnValueOnce(null as any)
 
-      await expect(() => 
-        forgotPasswordUseCase.execute({ email: uniqueEmail })
-      ).rejects.toBeInstanceOf(UserNotFoundForPasswordResetError)
+      await expect(() => forgotPasswordUseCase.execute({ email: uniqueEmail })).rejects.toBeInstanceOf(
+        UserNotFoundForPasswordResetError,
+      )
 
       findSpy.mockRestore()
-
     } catch (error) {
       console.log('ERROR: ', error)
       throw error
     }
   })
 
-  it("should generate a password reset token and expiration time for the same token", async () => {
+  it('should generate a password reset token and expiration time for the same token', async () => {
     try {
       const usersRepository = new InMemoryUsersRepository()
       const registerUseCase = new RegisterUserUseCase(usersRepository)
@@ -70,7 +69,7 @@ describe('Forgot Password Use Case', () => {
       expect(token).toHaveLength(64)
       expect(user.token).toBe(token)
 
-      if(user.tokenExpiresAt) {
+      if (user.tokenExpiresAt) {
         const expiresAt = new Date(user.tokenExpiresAt).getTime()
         const expectedMin = before + 15 * 60 * 1000
         const expectedMax = after + 15 * 60 * 1000
@@ -79,7 +78,6 @@ describe('Forgot Password Use Case', () => {
       } else {
         throw new Error('tokenExpiresAt is not set')
       }
-
     } catch (error) {
       console.log('ERROR: ', error)
       throw error
@@ -112,11 +110,9 @@ describe('Forgot Password Use Case', () => {
       )
 
       updatePasswordSpy.mockRestore()
-
     } catch (error) {
       console.log('ERROR: ', error)
       throw error
     }
   })
-
 })

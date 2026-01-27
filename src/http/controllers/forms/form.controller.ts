@@ -74,7 +74,7 @@ export async function formSubmission(request: FastifyRequest, reply: FastifyRepl
     reply.status(201).send({ formSubmission })
   } catch (error) {
     if (error instanceof FormSubmissionError) {
-      return reply.status(500).send({ message: error.message })
+      return reply.status(503).send({ message: error.message })
     }
 
     throw error

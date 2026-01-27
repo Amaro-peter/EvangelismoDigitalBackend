@@ -1,6 +1,6 @@
 import { AxiosError, AxiosInstance } from 'axios'
 import { Redis } from 'ioredis'
-import { GeocodingProvider, GeoCoordinates, GeoSearchOptions, GeoPrecision } from './geo-provider.interface'
+import { GeocodingProvider, GeoCoordinates, GeoSearchOptions } from './geo-provider.interface'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { createHttpClient } from '@lib/http/axios'
 import { logger } from '@lib/logger'
@@ -82,7 +82,7 @@ export class NominatimGeoProvider implements GeocodingProvider {
 
       const cleanParams = this.cleanParams(params)
 
-      const response = await NominatimGeoProvider.api.get<any[]>('/search', {
+      const response = await NominatimGeoProvider.api.get('/search', {
         params: cleanParams,
         signal,
       })

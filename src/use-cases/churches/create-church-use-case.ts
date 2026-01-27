@@ -60,16 +60,16 @@ export class CreateChurchUseCase {
       }
 
       return church
-    } catch (err: any) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new ChurchAlreadyExistsError()
       }
 
-      if (err.message === 'church-already-exists') {
+      if (error instanceof ChurchAlreadyExistsError) {
         throw new ChurchAlreadyExistsError()
       }
 
-      throw err
+      throw error
     }
   }
 }

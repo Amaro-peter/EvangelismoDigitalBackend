@@ -30,7 +30,7 @@ export class FormsSubmissionUseCase {
       email,
       decisaoPorCristo,
       location: location || null,
-    } as any)
+    })
 
     if (!formSubmission) {
       throw new FormSubmissionError()

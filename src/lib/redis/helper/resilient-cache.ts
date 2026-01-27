@@ -22,16 +22,16 @@ export interface CacheEnvelope<T> {
     // error: Exists only if s=false
     type: string // Error class name (e.g., 'InvalidCepError')
     message: string
-    data?: any // Additional error data
+    data?: unknown // Additional error data
   }
 }
 
 // === Error thrown when retrieving a cached failure ===
 export class CachedFailureError extends Error {
   public readonly errorType: string
-  public readonly errorData?: any
+  public readonly errorData?: unknown
 
-  constructor(type: string, message: string, data?: any) {
+  constructor(type: string, message: string, data?: unknown) {
     super(message)
     this.name = 'CachedFailureError'
     this.errorType = type
@@ -40,7 +40,7 @@ export class CachedFailureError extends Error {
 }
 
 export class ResilientCache {
-  private readonly pendingFetches = new Map<string, Promise<any>>()
+  private readonly pendingFetches = new Map<string, Promise<unknown>>()
 
   private readonly MAX_PENDING: number
   private readonly FETCH_TIMEOUT: number
@@ -55,7 +55,7 @@ export class ResilientCache {
     this.JITTER_PERCENTAGE = options.ttlJitterPercentage ?? 0.05
   }
 
-  generateKey(params: Record<string, any>): string {
+  generateKey(params: Record<string, unknown>): string {
     const stableString = Object.keys(params)
       .filter((k) => params[k] !== undefined && params[k] !== null && params[k] !== '')
       .sort()
@@ -71,7 +71,7 @@ export class ResilientCache {
     key: string,
     fetcher: (signal: AbortSignal) => Promise<T>,
     // Optional: Function that decides if error should be cached and returns error metadata
-    errorMapper?: (error: unknown) => { type: string; message: string; data?: any } | null,
+    errorMapper?: (error: unknown) => { type: string; message: string; data?: unknown } | null,
     parentSignal?: AbortSignal,
   ): Promise<T | null> {
     // 1. Circuit Breaker FIRST (before any work)
@@ -140,7 +140,7 @@ export class ResilientCache {
   private async executeFetchWithSignalLogic<T>(
     key: string,
     fetcher: (signal: AbortSignal) => Promise<T>,
-    errorMapper?: (error: unknown) => { type: string; message: string; data?: any } | null,
+    errorMapper?: (error: unknown) => { type: string; message: string; data?: unknown } | null,
     parentSignal?: AbortSignal,
   ): Promise<T | null> {
     const timeoutSignal = AbortSignal.timeout(this.FETCH_TIMEOUT)

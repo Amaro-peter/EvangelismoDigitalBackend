@@ -9,7 +9,7 @@ export async function getUserProfile(request: FastifyRequest, reply: FastifyRepl
   try {
     const getUserProfileUseCase = makeGetUserProfileUseCase()
 
-    const data = { publicId: String((request.user as any)?.sub) }
+    const data = { publicId: String(request.user?.sub) }
 
     const { publicId } = publicIdSchema.parse(data)
 

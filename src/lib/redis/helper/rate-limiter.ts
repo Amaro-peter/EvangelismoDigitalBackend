@@ -58,7 +58,7 @@ export enum EnumProviderConfig {
 }
 
 export class RedisRateLimiter {
-  private static instance: RedisRateLimiter
+  private static instance: RedisRateLimiter | null
   private readonly redis: Redis
 
   // 1 limiter por provider (contrato honesto)
@@ -117,8 +117,9 @@ export class RedisRateLimiter {
       throw new NoRateLimiterSetError(provider)
     }
 
-    if (this.limiters.has(provider)) {
-      return this.limiters.get(provider)!
+    const existingLimiter = this.limiters.get(provider)
+    if (existingLimiter) {
+      return existingLimiter
     }
 
     const limiter = new RateLimiterRedis({
@@ -155,18 +156,26 @@ export class RedisRateLimiter {
 
       await limiter.consume(CONSUMER_KEY, 1)
       return true
-    } catch (error: any) {
-      if (error?.remainingPoints !== undefined) {
+    } catch (error) {
+      const err = error as unknown
+
+      if (
+        typeof err === 'object' &&
+        err !== null &&
+        'remainingPoints' in err &&
+        typeof (err as Record<string, unknown>).remainingPoints === 'number'
+      ) {
         return false
       }
 
-      // Falha de infraestrutura (Redis down, timeout, etc)
+      const obj = typeof err === 'object' && err !== null ? (err as Record<string, unknown>) : {}
+
       logger.error(
         {
-          message: error?.message,
-          stack: error?.stack,
-          code: error?.code,
-          name: error?.name,
+          message: typeof obj.message === 'string' ? obj.message : undefined,
+          stack: typeof obj.stack === 'string' ? obj.stack : undefined,
+          code: typeof obj.code === 'string' ? obj.code : undefined,
+          name: typeof obj.name === 'string' ? obj.name : undefined,
           provider,
         },
         'ERRO CRÍTICO RedisRateLimiter: Redis indisponível. Fail-Closed ativado.',
@@ -184,11 +193,11 @@ export class RedisRateLimiter {
 
     await this.instance.destroyRateLimiterMap()
 
-    this.instance = undefined as any
+    this.instance = null
   }
 
   private async destroyRateLimiterMap() {
-    for (const [provider, limiter] of this.limiters.entries()) {
+    for (const [provider] of this.limiters.entries()) {
       try {
         logger.debug({ provider }, 'Clearing rate limiter instance')
       } catch (error) {

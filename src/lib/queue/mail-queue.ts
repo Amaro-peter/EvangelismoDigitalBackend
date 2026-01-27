@@ -1,6 +1,6 @@
 import { logger } from '@lib/logger'
 import { redisQueue } from '@lib/redis/clients'
-import { createRedisBullMQConnection, attachRedisLogger } from '@lib/redis/redis-bullMQ-connection'
+import { attachRedisLogger } from '@lib/redis/redis-bullMQ-connection'
 import { Queue } from 'bullmq'
 
 export const MAIL_QUEUE_NAME = 'mail-queue'

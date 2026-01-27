@@ -1,6 +1,6 @@
 import { AxiosInstance, AxiosError } from 'axios'
 import { Redis } from 'ioredis'
-import { GeocodingProvider, GeoCoordinates, GeoSearchOptions, GeoPrecision } from './geo-provider.interface'
+import { GeocodingProvider, GeoCoordinates, GeoSearchOptions } from './geo-provider.interface'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { createHttpClient } from '@lib/http/axios'
 import { logger } from '@lib/logger'
@@ -80,7 +80,7 @@ export class LocationIqProvider implements GeocodingProvider {
     )
   }
 
-  private async performRequest(params: Record<string, any>, signal?: AbortSignal): Promise<GeoCoordinates | null> {
+  private async performRequest(params: Record<string, unknown>, signal?: AbortSignal): Promise<GeoCoordinates | null> {
     let lastError: Error | unknown = undefined
 
     for (let attempt = 1; attempt <= this.MAX_ATTEMPTS; attempt++) {
@@ -150,7 +150,7 @@ export class LocationIqProvider implements GeocodingProvider {
             },
             'Provedor LocationIQ falhou ao buscar coordenadas',
           )
-          throw new GeoProviderFailureError()
+          throw new GeoProviderFailureError(lastError)
         }
 
         // Backoff apenas para erros de rede/servidor instável
@@ -161,7 +161,7 @@ export class LocationIqProvider implements GeocodingProvider {
 
     // This should be unreachable, but as a safety net, throw last error or generic error
     //logger.error({ lastError }, 'LocationIQ: Unexpected code path - all attempts exhausted without throw')
-    throw new GeoProviderFailureError()
+    throw new GeoProviderFailureError(lastError)
   }
 
   private sleep(ms: number): Promise<void> {

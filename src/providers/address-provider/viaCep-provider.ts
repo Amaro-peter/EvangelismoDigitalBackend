@@ -73,6 +73,8 @@ export class ViaCepProvider implements AddressProvider {
       throw new AddressServiceBusyError('ViaCEP (Rate Limit Excedido)')
     }
 
+    let lastError: Error | unknown = undefined
+
     for (let attempt = 1; attempt <= this.MAX_RETRIES; attempt++) {
       if (signal?.aborted) {
         throw signal.reason
@@ -116,6 +118,8 @@ export class ViaCepProvider implements AddressProvider {
           return null
         }
 
+        lastError = error
+
         // Retry logic para erros de rede, 500 ou 429
         const isRetryable = !err.response || (typeof status === 'number' && (status >= 500 || status === 429))
 
@@ -137,7 +141,7 @@ export class ViaCepProvider implements AddressProvider {
             'Falha ao buscar endereço após tentativas (ViaCEP)',
           )
 
-          throw new AddressProviderFailureError()
+          throw new AddressProviderFailureError(lastError)
         }
 
         const delay = this.BACKOFF_MS * Math.pow(2, attempt - 1)
@@ -160,7 +164,7 @@ export class ViaCepProvider implements AddressProvider {
     }
 
     logger.error({ cep: cleanCep }, 'ViaCEP - todas as tentativas esgotadas sem sucesso')
-    throw new AddressProviderFailureError()
+    throw new AddressProviderFailureError(lastError)
   }
 
   private sleep(ms: number): Promise<void> {

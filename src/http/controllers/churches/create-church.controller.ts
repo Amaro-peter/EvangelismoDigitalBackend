@@ -42,7 +42,7 @@ export async function createChurch(request: FastifyRequest, reply: FastifyReply)
 
     if (error instanceof CreateChurchError) {
       logger.warn({
-        msg: 'Coordenadas inválidas fornecidas ao criar igreja',
+        msg: 'Falha ao criar a igreja',
         error: error.message,
       })
       return reply.status(400).send({ message: error.message })

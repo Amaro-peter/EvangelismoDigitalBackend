@@ -31,12 +31,9 @@ describe('List Users Use Case', () => {
 
       const listSpy = vi.spyOn(usersRepository, 'list').mockResolvedValue(null as any)
 
-      await expect(() =>
-        listUsersUseCase.execute(),
-      ).rejects.toBeInstanceOf(ResourceNotFoundError)
+      await expect(() => listUsersUseCase.execute()).rejects.toBeInstanceOf(ResourceNotFoundError)
 
       listSpy.mockRestore()
-
     } catch (error) {
       console.log('ERROR: ', error)
       throw error
@@ -113,7 +110,6 @@ describe('List Users Use Case', () => {
 
       expect(usersList.users).toHaveLength(2)
       expect(usersList.users).toEqual(expect.arrayContaining([user1, user2]))
-
     } catch (error) {
       console.log('ERROR: ', error)
       throw error

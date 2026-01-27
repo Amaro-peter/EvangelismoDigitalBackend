@@ -20,7 +20,7 @@ describe('Authenticate User Use Case', () => {
 
       const password = 'Teste123x!'
 
-       await registerUseCase.execute({
+      await registerUseCase.execute({
         name: 'John Doe',
         email: uniqueEmail,
         cpf: uniqueCpf,
@@ -29,7 +29,6 @@ describe('Authenticate User Use Case', () => {
         role: UserRole.DEFAULT,
       })
 
-      
       const { user } = await authenticateUserUseCase.execute({
         login: uniqueEmail,
         password,
@@ -134,12 +133,11 @@ describe('Authenticate User Use Case', () => {
       })
 
       await expect(() =>
-       authenticateUserUseCase.execute({
-        login: invalidEmail,
-        password,
-       }), 
+        authenticateUserUseCase.execute({
+          login: invalidEmail,
+          password,
+        }),
       ).rejects.toBeInstanceOf(InvalidCredentialsError)
-
     } catch (error) {
       console.log('ERROR: ', error)
       throw error

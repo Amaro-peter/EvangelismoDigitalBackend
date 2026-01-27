@@ -63,7 +63,10 @@ export class ResilientGeoProvider implements GeocodingProvider {
           throw new CoordinatesNotFoundError()
         }
         // Unexpected cached error type
-        logger.error({ query, cachedError: error }, 'Tipo de erro em cache inesperado na busca simples por geocodificação')
+        logger.error(
+          { query, cachedError: error },
+          'Tipo de erro em cache inesperado na busca simples por geocodificação',
+        )
         throw new GeoProviderFailureError()
       }
 
@@ -108,7 +111,10 @@ export class ResilientGeoProvider implements GeocodingProvider {
           throw new CoordinatesNotFoundError()
         }
         // Unexpected cached error type
-        logger.error({ options, cachedError: error }, 'Tipo de erro em cache inesperado na busca estruturada por geocodificação')
+        logger.error(
+          { options, cachedError: error },
+          'Tipo de erro em cache inesperado na busca estruturada por geocodificação',
+        )
         throw new GeoProviderFailureError()
       }
 

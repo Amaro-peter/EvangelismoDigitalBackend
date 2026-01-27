@@ -41,8 +41,8 @@ export const options = {
     },
   },
   thresholds: {
-    'cache_hit_duration': ['p(95)<50'],
-    'cold_path_duration': ['p(95)<5000'],
+    cache_hit_duration: ['p(95)<50'],
+    cold_path_duration: ['p(95)<5000'],
     'http_req_failed{status:500}': ['rate==0'],
   },
 }
@@ -99,8 +99,8 @@ export function cacheTest() {
   check(res, {
     'status is 200 (cache)': (r) => r.status === 200,
     'cache payload is valid': (r) => {
-        const body = r.json();
-        return Array.isArray(body.churches) && body.totalFound === 10;
+      const body = r.json()
+      return Array.isArray(body.churches) && body.totalFound === 10
     },
   })
 
@@ -129,9 +129,8 @@ export function rateLimitTest() {
   }
 
   check(res, {
-    'status handled correctly': (r) => 
-      [200, 400, 404, 429, 503].includes(r.status),
-    
+    'status handled correctly': (r) => [200, 400, 404, 429, 503].includes(r.status),
+
     'valid churches array & totalFound=10 (if 200)': (r) => {
       if (r.status !== 200) return true
       const body = r.json()

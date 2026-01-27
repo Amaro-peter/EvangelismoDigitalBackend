@@ -71,7 +71,6 @@ export async function findNearestChurches(
     return reply
       .status(200)
       .send({ nearbyChurchInfo: nearbyChurch, churches: sanitizedChurches, totalFound, precision, providerName })
-
   } catch (error) {
     // 1. Erros de Negócio (Bad Request - 400)
     if (error instanceof LatitudeRangeError || error instanceof LongitudeRangeError) {

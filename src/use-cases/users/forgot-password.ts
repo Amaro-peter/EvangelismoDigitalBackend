@@ -23,7 +23,7 @@ export class ForgotPasswordUseCase {
     let userExists: User | null = null
 
     if (emailSchema.safeParse(email).success) {
-      userExists = await this.usersRepository.findBy({ email: email! })
+      userExists = await this.usersRepository.findBy({ email: email })
     }
 
     if (!userExists) throw new UserNotFoundForPasswordResetError()

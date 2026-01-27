@@ -1,6 +1,5 @@
-import { ChurchesRepository } from "@repositories/churches-repository"
-import { ChurchNotFoundError } from "@use-cases/errors/church-not-found-error"
-
+import { ChurchesRepository } from '@repositories/churches-repository'
+import { ChurchNotFoundError } from '@use-cases/errors/church-not-found-error'
 
 interface FindChurchPublicIdByNameUseCaseRequest {
   name: string
@@ -8,8 +7,7 @@ interface FindChurchPublicIdByNameUseCaseRequest {
 
 interface FindChurchPublicIdByNameUseCaseResponse {
   publicId: string
-}   
-
+}
 
 export class FindChurchPublicIdByNameUseCase {
   constructor(private churchesRepository: ChurchesRepository) {}
