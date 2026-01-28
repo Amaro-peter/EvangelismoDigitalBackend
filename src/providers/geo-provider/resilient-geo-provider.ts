@@ -178,7 +178,7 @@ export class ResilientGeoProvider implements GeocodingProvider {
         if (error instanceof GeoServiceBusyError) {
           logger.warn(
             { provider: providerName, attempt: index + 1 },
-            'Provedor está ocupado (Limite de Taxa). Alternando...',
+            'Provedor de geocodificação ocupado (429). Alternando para o próximo provedor...',
           )
         } else {
           logger.warn({ provider: providerName, error: errMsg }, 'Provedor falhou (Erro de Sistema). Alternando...')
@@ -193,6 +193,11 @@ export class ResilientGeoProvider implements GeocodingProvider {
         { lastError, provider: lastProviderName },
         'Geocodificação falhou com erros de sistema (não cacheando)',
       )
+
+      if (lastError instanceof GeoServiceBusyError) {
+        throw lastError
+      }
+
       throw new GeoProviderFailureError(lastError)
     }
 
