@@ -76,7 +76,6 @@ export class ResilientCache {
   ): Promise<T | null> {
     // 1. Circuit Breaker FIRST (before any work)
     if (this.pendingFetches.size >= this.MAX_PENDING) {
-      logger.error({ key }, 'ResilientCache overloaded (MAX_PENDING reached)')
       throw new ServiceOverloadError()
     }
 
@@ -96,8 +95,8 @@ export class ResilientCache {
         if (envelope.s) {
           // Validate that value exists in success envelope
           if (!('v' in envelope)) {
-            logger.error({ key, envelope }, 'Corrupted cache: success envelope missing value')
-            throw new Error('Corrupted cache: success envelope missing value')
+            logger.error({ key, envelope }, 'Cache corrompida detectada: CacheEnvelop de sucesso sem valor')
+            throw new OperationAbortedError('Cache corrompida: CacheEnvelop de sucesso sem valor')
           }
           return envelope.v as T
         }
@@ -110,10 +109,10 @@ export class ResilientCache {
     } catch (err) {
       // Re-throw specific error types that should propagate
       if (err instanceof CachedFailureError) throw err
-      if (err instanceof Error && err.message.includes('Corrupted cache')) throw err
+      if (err instanceof Error && err.message.includes('Cache corrompida')) throw err
 
       // Only swallow Redis connection/parsing errors
-      logger.warn({ err, key }, 'Redis read failed/corrupted. Proceeding to fetch.')
+      logger.warn({ err, key }, 'Erro de leitura ou falha do Redis. Continuando sem cache.')
     }
 
     // 4. Double-check pattern: Check again after async Redis call
@@ -216,7 +215,7 @@ export class ResilientCache {
 
     // Handle edge case: if negativeTtlSeconds is 0, don't cache at all
     if (baseTtl <= 0) {
-      logger.debug({ key }, 'TTL <= 0, skipping cache write')
+      logger.debug({ key }, 'TTL <= 0, pulando escrita no cache')
       return
     }
 
@@ -229,7 +228,7 @@ export class ResilientCache {
     } catch (err) {
       // Cache write is best-effort - log but don't throw
       // Redis failure should not break successful fetches
-      logger.error({ err, key }, 'Failed to write to Redis (non-fatal, continuing)')
+      logger.error({ err, key }, 'Falha ao escrever no Redis (não fatal, continuando)')
       // Don't re-throw - system continues functioning without cache
     }
   }
