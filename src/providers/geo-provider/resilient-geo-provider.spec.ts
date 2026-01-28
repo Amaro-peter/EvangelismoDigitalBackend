@@ -265,23 +265,57 @@ describe('ResilientGeoProvider Unit Tests', () => {
       await expect(provider.search('Nowhere')).rejects.toThrow(CoordinatesNotFoundError)
     })
 
-    it('should throw GeoProviderFailureError if ANY provider had a System Error, even if others said Not Found', async () => {
-      const provider = createProvider()
-
-      // Provedor 1 falha com erro de sistema
-      vi.spyOn(provider1, 'search').mockRejectedValue(new GeoServiceBusyError('MockProvider1'))
-      // Provedor 2 diz que não existe
-      vi.spyOn(provider2, 'search').mockResolvedValue(null)
-
-      // Regra de negócio: Se houve erro de sistema, não podemos afirmar que não existe
-      await expect(provider.search('Query')).rejects.toThrow(GeoProviderFailureError)
-    })
-
-    it('should throw GeoProviderFailureError if ALL providers have System Errors', async () => {
+    it('should throw GeoServiceBusyError if the last provider had a ServiceBusy error', async () => {
       const provider = createProvider()
 
       vi.spyOn(provider1, 'search').mockRejectedValue(new Error('Connection timeout'))
       vi.spyOn(provider2, 'search').mockRejectedValue(new GeoServiceBusyError('MockProvider2'))
+
+      await expect(provider.search('Query')).rejects.toThrow(GeoServiceBusyError)
+    })
+
+    it('should throw GeoProviderFailureError if the last provider had a non-busy System Error', async () => {
+      const provider = createProvider()
+
+      vi.spyOn(provider1, 'search').mockRejectedValue(new GeoServiceBusyError('MockProvider1'))
+      vi.spyOn(provider2, 'search').mockRejectedValue(new Error('Connection timeout'))
+
+      await expect(provider.search('Query')).rejects.toThrow(GeoProviderFailureError)
+    })
+
+    it('should throw GeoServiceBusyError if ANY provider had a System Error and last was ServiceBusy, even if others said Not Found', async () => {
+      const provider = createProvider()
+
+      vi.spyOn(provider1, 'search').mockResolvedValue(null)
+      vi.spyOn(provider2, 'search').mockRejectedValue(new GeoServiceBusyError('MockProvider2'))
+
+      await expect(provider.search('Query')).rejects.toThrow(GeoServiceBusyError)
+    })
+
+    it('should throw GeoProviderFailureError if ANY provider had a non-busy System Error and last was not ServiceBusy, even if others said Not Found', async () => {
+      const provider = createProvider()
+
+      vi.spyOn(provider1, 'search').mockResolvedValue(null)
+      vi.spyOn(provider2, 'search').mockRejectedValue(new Error('Network error'))
+
+      await expect(provider.search('Query')).rejects.toThrow(GeoProviderFailureError)
+    })
+
+    it('should throw GeoServiceBusyError if ALL providers have ServiceBusy errors', async () => {
+      const provider = createProvider()
+
+      vi.spyOn(provider1, 'search').mockRejectedValue(new GeoServiceBusyError('MockProvider1'))
+      vi.spyOn(provider2, 'search').mockRejectedValue(new GeoServiceBusyError('MockProvider2'))
+
+      await expect(provider.search('Query')).rejects.toThrow(GeoServiceBusyError)
+    })
+
+    it('should throw GeoProviderFailureError with wrapped error when last error is generic system error', async () => {
+      const provider = createProvider()
+      const systemError = new Error('Database connection failed')
+
+      vi.spyOn(provider1, 'search').mockRejectedValue(new GeoServiceBusyError('MockProvider1'))
+      vi.spyOn(provider2, 'search').mockRejectedValue(systemError)
 
       await expect(provider.search('Query')).rejects.toThrow(GeoProviderFailureError)
     })
