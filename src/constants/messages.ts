@@ -36,7 +36,7 @@ export const messages = {
     noGeoProviderError:
       'Provedor resiliente de geolocalização requer pelo menos um provedor de geolocalização configurado.',
     noAddressProviderError: 'Provedor resiliente de endereço requer pelo menos um provedor de endereço configurado.',
-    operationAbortedError: 'Operação abortada pelo cache manager devido a timeout ou cancelamento.',
+    operationAbortedError: 'Operação abortada pelo cache manager.',
     addressProviderFailureError: 'Falha de sistema ao tentar obter endereço do provedor de serviços.',
     cepToLatLonError: 'Falha de sistema ao tentar converter CEP para coordenadas.',
     noRateLimiterSetError: 'Nenhum rate limiter foi configurado para este provedor.',

@@ -201,7 +201,7 @@ describe('RedisRateLimiter Unit Tests', () => {
       // Verifica se o logger foi chamado para cada provider
       expect(logger.debug).toHaveBeenCalledWith(
         { provider: EnumProviderConfig.VIACEP_ADDRESS },
-        'Clearing rate limiter instance',
+        'Limpando RateLimiter do provider.',
       )
     })
 
@@ -211,7 +211,7 @@ describe('RedisRateLimiter Unit Tests', () => {
 
       await expect(RedisRateLimiter.destroyInstance()).resolves.not.toThrow()
 
-      expect(logger.debug).toHaveBeenCalledWith('No RateLimiter instance to destroy')
+      expect(logger.debug).toHaveBeenCalledWith('Nenhuma instância de RedisRateLimiter para destruir.')
     })
   })
 })

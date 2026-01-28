@@ -134,7 +134,7 @@ export class ResilientAddressProvider implements AddressProvider {
         if (error instanceof AddressServiceBusyError) {
           logger.warn(
             { provider: providerName, error: errMsg, attempt: index + 1 },
-            'Provedor falhou (Erro de Sistema). Alternando para fallback...',
+            'Provedor de endereço ocupado (429). Alternando para o próximo provedor...',
           )
         } else {
           logger.warn({ provider: providerName, error: errMsg }, 'Provedor falhou (Erro de Sistema). Alternando...')
@@ -150,6 +150,11 @@ export class ResilientAddressProvider implements AddressProvider {
         { cep, lastError, provider: lastProviderName, notFoundCount },
         'Provedores de endereço falharam com erros de sistema (não cacheando)',
       )
+
+      if (lastError instanceof AddressServiceBusyError) {
+        throw lastError
+      }
+
       throw new AddressProviderFailureError(lastError)
     }
 

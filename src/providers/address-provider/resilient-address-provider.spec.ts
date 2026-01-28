@@ -233,20 +233,57 @@ describe('ResilientAddressProvider Unit Tests', () => {
       await expect(provider.fetchAddress('12345678')).rejects.toThrow(InvalidCepError)
     })
 
-    it('should throw AddressProviderFailureError if ANY provider had a System Error, even if others said Not Found', async () => {
-      const provider = createProvider()
-
-      vi.spyOn(provider1, 'fetchAddress').mockRejectedValue(new AddressServiceBusyError('MockProvider1'))
-      vi.spyOn(provider2, 'fetchAddress').mockResolvedValue(null)
-
-      await expect(provider.fetchAddress('12345678')).rejects.toThrow(AddressProviderFailureError)
-    })
-
-    it('should throw AddressProviderFailureError if ALL providers have System Errors', async () => {
+    it('should throw AddressServiceBusyError if the last provider had a ServiceBusy error', async () => {
       const provider = createProvider()
 
       vi.spyOn(provider1, 'fetchAddress').mockRejectedValue(new Error('Connection timeout'))
       vi.spyOn(provider2, 'fetchAddress').mockRejectedValue(new AddressServiceBusyError('MockProvider2'))
+
+      await expect(provider.fetchAddress('12345678')).rejects.toThrow(AddressServiceBusyError)
+    })
+
+    it('should throw AddressProviderFailureError if the last provider had a non-busy System Error', async () => {
+      const provider = createProvider()
+
+      vi.spyOn(provider1, 'fetchAddress').mockRejectedValue(new AddressServiceBusyError('MockProvider1'))
+      vi.spyOn(provider2, 'fetchAddress').mockRejectedValue(new Error('Connection timeout'))
+
+      await expect(provider.fetchAddress('12345678')).rejects.toThrow(AddressProviderFailureError)
+    })
+
+    it('should throw AddressServiceBusyError if ANY provider had a System Error and last was ServiceBusy, even if others said Not Found', async () => {
+      const provider = createProvider()
+
+      vi.spyOn(provider1, 'fetchAddress').mockResolvedValue(null)
+      vi.spyOn(provider2, 'fetchAddress').mockRejectedValue(new AddressServiceBusyError('MockProvider2'))
+
+      await expect(provider.fetchAddress('12345678')).rejects.toThrow(AddressServiceBusyError)
+    })
+
+    it('should throw AddressProviderFailureError if ANY provider had a non-busy System Error and last was not ServiceBusy, even if others said Not Found', async () => {
+      const provider = createProvider()
+
+      vi.spyOn(provider1, 'fetchAddress').mockResolvedValue(null)
+      vi.spyOn(provider2, 'fetchAddress').mockRejectedValue(new Error('Network error'))
+
+      await expect(provider.fetchAddress('12345678')).rejects.toThrow(AddressProviderFailureError)
+    })
+
+    it('should throw AddressServiceBusyError if ALL providers have ServiceBusy errors', async () => {
+      const provider = createProvider()
+
+      vi.spyOn(provider1, 'fetchAddress').mockRejectedValue(new AddressServiceBusyError('MockProvider1'))
+      vi.spyOn(provider2, 'fetchAddress').mockRejectedValue(new AddressServiceBusyError('MockProvider2'))
+
+      await expect(provider.fetchAddress('12345678')).rejects.toThrow(AddressServiceBusyError)
+    })
+
+    it('should throw AddressProviderFailureError with wrapped error when last error is generic system error', async () => {
+      const provider = createProvider()
+      const systemError = new Error('Database connection failed')
+
+      vi.spyOn(provider1, 'fetchAddress').mockRejectedValue(new AddressServiceBusyError('MockProvider1'))
+      vi.spyOn(provider2, 'fetchAddress').mockRejectedValue(systemError)
 
       await expect(provider.fetchAddress('12345678')).rejects.toThrow(AddressProviderFailureError)
     })
