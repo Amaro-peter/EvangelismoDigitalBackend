@@ -150,6 +150,15 @@ services:
         npm run start:worker
     networks:
       - evangelismo-network
+  valhalla:
+    image: ghcr.io/gis-ops/docker-valhalla/valhalla:latest
+    container_name: valhalla_server_compose
+    ports:
+      - "8002:8002"
+    volumes:
+      - /home/amaro/valhalla_docker/custom_files:/custom_files
+    networks:
+      - evangelismo-network
 
 volumes:
   pgdata:

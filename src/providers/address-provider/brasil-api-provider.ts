@@ -8,6 +8,7 @@ import { AddressServiceBusyError } from '@use-cases/errors/address-service-busy-
 import { PrecisionHelper } from 'providers/helpers/precision-helper'
 import { AddressProviderFailureError } from './error/address-provider-failure-error'
 import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
+import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 
 export interface BrasilApiConfig {
   apiUrl: string // Esperado: https://brasilapi.com.br
@@ -88,7 +89,7 @@ export class BrasilApiProvider implements AddressProvider {
           signal,
         })
 
-        if (!data || !data.cep) {
+        if (!data || !data.cep || !data.city || !data.state) {
           return null
         }
 
@@ -124,7 +125,7 @@ export class BrasilApiProvider implements AddressProvider {
         // 404 significa CEP não encontrado na base deles - retorna null para tentar próximo provider
         if (status === 404) {
           logger.warn({ cep: cleanCep, attempt, status }, 'CEP não encontrado na BrasilAPI (404)')
-          return null
+          throw new InvalidCepError()
         }
 
         lastError = error

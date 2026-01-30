@@ -66,7 +66,6 @@ export class RedisRateLimiter {
 
   /**
    * Central de configuração dos providers
-   * ➜ Impossível usar errado
    */
   private readonly providerConfigs: Record<EnumProviderConfig, ProviderRateLimitConfig> = {
     [EnumProviderConfig.AWESOME_API_ADDRESS]: {

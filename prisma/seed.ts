@@ -31,6 +31,27 @@ export async function seed() {
       lon: -42.98820687963332,
     },
     {
+      publicId: '019c0baf-a7de-77c7-a86a-6c5c7330c01b',
+      name: 'Igreja Batista da Orla de Niterói',
+      address: '001, R. Prof. Lara Vilela, 140 - São Domingos, Niterói - RJ',
+      lat: -22.901485779245583,
+      lon: -43.12753088358463,
+    },
+    {
+      publicId: '019c0bb1-3e0c-7878-8676-f0cb66158ae1',
+      name: 'Primeira Igreja Batista em Vila da Penha | PIBVP',
+      address: 'Av. Meriti, 2470 - Vila da Penha, Rio de Janeiro - RJ, 21211-006',
+      lat: -22.838490560009944,
+      lon: -43.310333725733315,
+    },
+    {
+      publicId: '019c0bb8-05ad-7ad7-971b-0f892bd20bb2',
+      name: 'PRIMEIRA IGREJA BATISTA TANGUA',
+      address: 'R. Manoel João Gonçalves, 1140 - Centro, Tanguá - RJ, 24890-000',
+      lat: -22.729780340329153,
+      lon: -42.71025199422345,
+    },
+    {
       publicId: '0197fa3e-1b83-7d4c-9a8f-1e2b3c5d6a90',
       name: 'Igreja Presbiteriana Betânia de Icaraí',
       address: 'R. Otávio Carneiro, 144 - Icaraí - Niterói/RJ',

@@ -8,6 +8,7 @@ import { EnumProviderConfig, RedisRateLimiter } from '@lib/redis/helper/rate-lim
 import { PrecisionHelper } from 'providers/helpers/precision-helper'
 import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
 import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
+import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-found-error'
 
 export interface NominatimConfig {
   apiUrl: string
@@ -112,7 +113,7 @@ export class NominatimGeoProvider implements GeocodingProvider {
 
       // 404 means not found - return null to try next provider
       if (status === 404) {
-        return null
+        throw new CoordinatesNotFoundError()
       }
 
       // API rate limit (429) - throw so ResilientGeoProvider tries next provider

@@ -189,10 +189,7 @@ export class ResilientGeoProvider implements GeocodingProvider {
     // === DECISION PHASE ===
     // If we had system errors, throw the last error (won't be cached)
     if (hasSystemError) {
-      logger.error(
-        { lastError, provider: lastProviderName },
-        'Geocodificação falhou com erros de sistema (não cacheando)',
-      )
+      logger.error({ provider: lastProviderName }, 'Geocodificação falhou com erros de sistema (não cacheando)')
 
       if (lastError instanceof GeoServiceBusyError) {
         throw lastError

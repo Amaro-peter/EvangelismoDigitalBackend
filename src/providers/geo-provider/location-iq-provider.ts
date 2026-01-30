@@ -8,6 +8,7 @@ import { EnumProviderConfig, RedisRateLimiter } from '@lib/redis/helper/rate-lim
 import { PrecisionHelper } from 'providers/helpers/precision-helper'
 import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
 import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
+import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-found-error'
 
 export interface LocationIqConfig {
   apiUrl: string
@@ -126,9 +127,8 @@ export class LocationIqProvider implements GeocodingProvider {
         const err = error as AxiosError
         const status = err.response?.status
 
-        // Erros de cliente (404) - return null para tentar próximo provider
         if (status === 404) {
-          return null
+          throw new CoordinatesNotFoundError()
         }
 
         // Store last error for potential re-throw

@@ -147,7 +147,7 @@ export class ResilientAddressProvider implements AddressProvider {
     // This ensures we retry when providers are unstable, even if some said "not found"
     if (hasSystemError) {
       logger.error(
-        { cep, lastError, provider: lastProviderName, notFoundCount },
+        { cep, provider: lastProviderName, notFoundCount },
         'Provedores de endereço falharam com erros de sistema (não cacheando)',
       )
 
