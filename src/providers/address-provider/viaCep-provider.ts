@@ -8,6 +8,7 @@ import { PrecisionHelper } from 'providers/helpers/precision-helper'
 import Redis from 'ioredis'
 import { AddressProviderFailureError } from './error/address-provider-failure-error'
 import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
+import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 
 export interface ViaCepConfig {
   apiUrl: string
@@ -115,7 +116,7 @@ export class ViaCepProvider implements AddressProvider {
         // 404 (raro no ViaCEP, geralmente retorna 200 com erro: true, mas tratamos por segurança)
         if (status === 404) {
           logger.warn({ cep: cleanCep, attempt, status }, 'CEP não encontrado na ViaCEP (404)')
-          return null
+          throw new InvalidCepError()
         }
 
         lastError = error

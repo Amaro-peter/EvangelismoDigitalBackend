@@ -8,6 +8,7 @@ import { PrecisionHelper } from 'providers/helpers/precision-helper'
 import Redis from 'ioredis'
 import { AddressProviderFailureError } from './error/address-provider-failure-error'
 import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
+import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 
 export interface AwesomeApiConfig {
   apiUrl: string
@@ -127,7 +128,7 @@ export class AwesomeApiProvider implements AddressProvider {
         // 404 means CEP not found - return null to try next provider
         if (status === 404) {
           logger.warn({ cep: cleanCep, attempt, status }, 'CEP não encontrado na AwesomeAPI (404)')
-          return null
+          throw new InvalidCepError()
         }
 
         lastError = error
