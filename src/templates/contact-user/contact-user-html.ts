@@ -18,6 +18,12 @@ export function contactUserHtmlTemplate(name: string) {
                             <p>Você será adicionado à nossa lista de e-mails para receber atualizações, recursos e inspiração para lhe auxiliar na sua jornada.</p>
                         </td>
                     </tr>
+
+                    <tr>
+                        <td style="padding: 20px; text-align: center; font-size: 12px; color: #999999;">
+                            <p style="margin: 5px 0 0;">Se deseja não receber mais estes e-mails, <a href="#" style="color: #999999; text-decoration: underline;">clique aqui</a>.</p>
+                        </td>
+                    </tr>
                 </table>
             </div>
         `
