@@ -1,5 +1,5 @@
-export function contactUserSubjectTextTemplate() {
+export function contactUserSubjectTextTemplate(name: string) {
   return `
-            Obrigado pelo seu contato
+            Graça e paz, ${name}. Ficamos felizes com o seu contato!
         `
 }
