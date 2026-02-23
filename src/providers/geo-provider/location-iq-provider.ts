@@ -1,6 +1,10 @@
 import { AxiosInstance, AxiosError } from 'axios'
 import { Redis } from 'ioredis'
-import { GeocodingProvider, GeoCoordinates, GeoSearchOptions } from './geo-provider.interface'
+import {
+  GeocodingProvider,
+  GeoCoordinates,
+  GeoSearchOptions,
+} from '../../core/contracts/providers/geo-provider.interface'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { createHttpClient } from '@lib/http/axios'
 import { logger } from '@lib/logger'

@@ -64,7 +64,7 @@ vi.mock('@lib/redis/helper/resilient-cache', () => {
 // Imports reais
 import Redis from 'ioredis'
 import { ResilientAddressProvider } from './resilient-address-provider'
-import { AddressProvider, AddressData } from './address-provider.interface'
+import { AddressProvider, AddressData } from '../../core/contracts/providers/address-provider.interface'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 import { NoAddressProviderError } from './error/no-address-provider-error'
 import { AddressProviderFailureError } from './error/address-provider-failure-error'

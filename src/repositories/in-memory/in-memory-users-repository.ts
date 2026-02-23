@@ -5,7 +5,7 @@ import {
   UserPasswordUpdateInput,
   UsersRepository,
   UserWhereUniqueInput,
-} from '@repositories/users-repository'
+} from 'core/contracts/repository/users-repository'
 
 export class InMemoryUsersRepository implements UsersRepository {
   public items: User[] = []

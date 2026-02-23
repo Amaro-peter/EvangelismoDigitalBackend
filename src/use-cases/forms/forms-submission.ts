@@ -1,4 +1,4 @@
-import { FormsRepository } from '@repositories/forms-repository'
+import { FormsRepository } from 'core/contracts/repository/forms-repository'
 import { FormSubmission } from '@prisma/client'
 import { FormSubmissionError } from '@use-cases/errors/form-submission-error'
 

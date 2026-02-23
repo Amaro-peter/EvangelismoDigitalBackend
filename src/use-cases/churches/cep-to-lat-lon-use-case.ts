@@ -1,7 +1,5 @@
 import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-found-error'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
-import { AddressData, AddressProvider } from 'providers/address-provider/address-provider.interface'
-import { GeocodingProvider, GeoCoordinates, GeoPrecision } from 'providers/geo-provider/geo-provider.interface'
 import { Redis } from 'ioredis'
 import { logger } from '@lib/logger'
 import { ResilientCache, ResilientCacheOptions, CachedFailureError } from '@lib/redis/helper/resilient-cache'
@@ -12,6 +10,12 @@ import { AddressServiceBusyError } from '@use-cases/errors/address-service-busy-
 import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
 import { AddressProviderFailureError } from 'providers/address-provider/error/address-provider-failure-error'
 import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
+import {
+  GeocodingProvider,
+  GeoCoordinates,
+  GeoPrecision,
+} from 'core/contracts/use-cases/providers/geo-provider.interface'
+import { AddressData, AddressProvider } from 'core/contracts/use-cases/providers/address-provider.interface'
 
 interface CepToLatLonRequest {
   cep: string

@@ -1,4 +1,4 @@
-import { ChurchesRepository } from '@repositories/churches-repository'
+import { ChurchesRepository } from 'core/contracts/repository/churches-repository'
 import { ChurchNotFoundError } from '@use-cases/errors/church-not-found-error'
 
 interface FindChurchPublicIdByNameUseCaseRequest {

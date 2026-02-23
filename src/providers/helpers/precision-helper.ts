@@ -1,5 +1,5 @@
-import { AddressData } from 'providers/address-provider/address-provider.interface'
-import { GeoPrecision } from 'providers/geo-provider/geo-provider.interface'
+import { AddressData } from 'core/contracts/use-cases/providers/address-provider.interface'
+import { GeoPrecision } from 'core/contracts/use-cases/providers/geo-provider.interface'
 
 // Tipagem flexível para aceitar dados brutos do Nominatim/LocationIQ
 interface OsmRawData {

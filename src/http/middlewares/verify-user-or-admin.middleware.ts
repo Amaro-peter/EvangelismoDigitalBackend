@@ -1,6 +1,6 @@
 import { messages } from '@constants/messages'
 import { FastifyJWT } from '@fastify/jwt'
-import { UserRole } from '@repositories/users-repository'
+import { UserRole } from 'core/contracts/repository/users-repository'
 import { FastifyReply, FastifyRequest } from 'fastify'
 
 export function verifyUserOrAdmin(paramName?: string) {

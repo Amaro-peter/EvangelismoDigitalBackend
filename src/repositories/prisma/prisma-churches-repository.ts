@@ -1,5 +1,11 @@
 import { prisma } from '@lib/prisma'
-import { ChurchesRepository, NearbyChurch, FindNearbyParams, Church, ChurchAlreadyExists } from '../churches-repository'
+import {
+  ChurchesRepository,
+  NearbyChurch,
+  FindNearbyParams,
+  Church,
+  ChurchAlreadyExists,
+} from '../../core/contracts/repository/churches-repository'
 import { Prisma } from '@prisma/client'
 import { ChurchAlreadyExistsError } from '@use-cases/errors/church-already-exists-error'
 

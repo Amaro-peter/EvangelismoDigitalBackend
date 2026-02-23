@@ -1,5 +1,5 @@
 import { AxiosError, AxiosInstance } from 'axios'
-import { AddressData, AddressProvider } from './address-provider.interface'
+import { AddressData, AddressProvider } from '../../core/contracts/providers/address-provider.interface'
 import { logger } from '@lib/logger'
 import { createHttpClient } from '@lib/http/axios'
 import { EnumProviderConfig, RedisRateLimiter } from '@lib/redis/helper/rate-limiter'

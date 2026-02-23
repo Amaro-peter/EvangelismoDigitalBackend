@@ -12,6 +12,7 @@ import * as Sentry from '@sentry/node'
 import { nodeProfilingIntegration } from '@sentry/profiling-node'
 import { closeAllRedisConnections } from '@lib/redis/clients'
 import { RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
+import { asyncContext } from '@http/plugins/async-context.plugin'
 z.config(z.locales.pt())
 
 export const app = fastify({
@@ -48,6 +49,8 @@ if (env.NODE_ENV === 'production') {
     }
   }, 60000)
 }
+
+app.register(asyncContext)
 
 app.addHook('onRequest', (request, _reply, done) => {
   const requestId = uuidv7()

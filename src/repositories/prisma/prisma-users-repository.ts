@@ -7,7 +7,7 @@ import {
   UsersRepository,
   UserUpdateInput,
   UserWhereUniqueInput,
-} from '@repositories/users-repository'
+} from 'core/contracts/repository/users-repository'
 
 export class PrismaUsersRepository implements UsersRepository {
   async create(data: CreateUser) {

@@ -1,4 +1,4 @@
-import { GeoPrecision } from 'providers/geo-provider/geo-provider.interface'
+import { GeoPrecision } from 'core/contracts/providers/geo-provider.interface'
 
 export interface AddressData {
   logradouro?: string

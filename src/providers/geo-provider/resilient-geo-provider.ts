@@ -1,5 +1,10 @@
 import { Redis } from 'ioredis'
-import { GeoCacheScope, GeocodingProvider, GeoCoordinates, GeoSearchOptions } from './geo-provider.interface'
+import {
+  GeoCacheScope,
+  GeocodingProvider,
+  GeoCoordinates,
+  GeoSearchOptions,
+} from '../../core/contracts/providers/geo-provider.interface'
 import { logger } from '@lib/logger'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { ResilientCache, ResilientCacheOptions, CachedFailureError } from '@lib/redis/helper/resilient-cache'

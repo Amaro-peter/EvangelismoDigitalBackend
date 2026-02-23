@@ -1,5 +1,5 @@
 import { Redis } from 'ioredis'
-import { AddressData, AddressProvider } from './address-provider.interface'
+import { AddressData, AddressProvider } from '../../core/contracts/providers/address-provider.interface'
 import { logger } from '@lib/logger'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 import { ResilientCache, ResilientCacheOptions, CachedFailureError } from '@lib/redis/helper/resilient-cache'

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import ms from 'ms'
 
 const envSchema = z.object({
   // Environment
@@ -7,6 +8,10 @@ const envSchema = z.object({
 
   // Database
   DATABASE_URL: z.url(),
+  DB_POOL_MAX: z.coerce.number().int().positive().default(10),
+  DB_POOL_MIN: z.coerce.number().int().positive().default(2),
+  DB_CONNECTION_TIMEOUT: z.coerce.number().int().positive().default(ms('10s')),
+  DB_IDLE_TIMEOUT: z.coerce.number().int().positive().default(ms('30s')),
 
   // Redis
   REDIS_HOST: z.string().default('redis'),
