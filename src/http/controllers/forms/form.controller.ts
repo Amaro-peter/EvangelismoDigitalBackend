@@ -56,7 +56,7 @@ export async function formSubmission(request: FastifyRequest, reply: FastifyRepl
     } else {
       await mailQueue.add('contact-user-email', {
         to: email,
-        subject: contactUserSubjectTextTemplate(),
+        subject: contactUserSubjectTextTemplate(name),
         message: contactUserTextTemplate(name),
         html: contactUserHtmlTemplate(name),
         context: { type: 'contact', recipient: 'user' },

@@ -4,7 +4,7 @@ export function contactUserHtmlTemplate(name: string) {
                 <table style="font-family: arial">
                     <tr>
                         <td align="center" style="background-color: #eb5933; padding: 20px; color: white;">
-                            <h1>Estamos aqui!</h1>
+                            <h1>Evangelismo Digital</h1>
                         </td>
                     </tr>
                     <tr>

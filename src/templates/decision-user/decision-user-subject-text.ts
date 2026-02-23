@@ -1,5 +1,5 @@
 export function decisionUserSubjectText() {
   return `
-        Lucas 19:9
+        Parabéns pela sua decisão por Cristo!
     `
 }
