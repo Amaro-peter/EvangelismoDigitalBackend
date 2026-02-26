@@ -35,7 +35,12 @@ export async function formSubmission(request: FastifyRequest, reply: FastifyRepl
   // 5. Sucesso
   const { sanitizedFormSubmission, outboxEvent } = result.value
 
-  OutboxSignal.publishNewItem(outboxEvent.publicId, outboxEvent)
+  OutboxSignal.publishNewItem(outboxEvent.publicId, outboxEvent).catch((err) => {
+    logger.error(
+      { publicId: outboxEvent.publicId },
+      'Prosseguindo com a resposta, mas falha ao publicar o evento na fila',
+    )
+  })
 
   logger.info({ sanitizedFormSubmission }, 'Formulário recebido com sucesso')
 

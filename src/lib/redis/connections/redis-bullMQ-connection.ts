@@ -11,15 +11,11 @@ export function createRedisBullMQConnection() {
 
     // === CORREÇÃO DE INFRAESTRUTURA (DOCKER) ===
     family: 4, // Força IPv4. Resolve instabilidade de rede no Docker.
-    keepAlive: 10000, // Mantém o socket TCP vivo.
-    lazyConnect: false, // MUDANÇA: Conecta imediatamente. Workers não devem ser lazy.
 
-    retryStrategy: (times) => {
-      // Retry agressivo e infinito
+    // === CONFIGURAÇÕES DE Tentativa de Conexão ===
+    /*retryStrategy: (times) => {
       return Math.min(times * 50, 2000)
-    },
-
-    enableOfflineQueue: false,
+    },*/
   })
 }
 

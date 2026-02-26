@@ -15,19 +15,18 @@ async function bootstrap() {
   try {
     logger.info('🔧 Inicializando serviços de background...')
 
-    worker = await startMailWorker()
-    logger.info('✅ Mail worker iniciado')
-
     const dbContext = new DatabaseContext()
     const outboxRepository = new PrismaOutboxRepository(dbContext)
+
+    worker = await startMailWorker(outboxRepository)
+    logger.info('✅ Mail worker iniciado')
+
     const outboxProcessor = new OutboxProcessor(outboxRepository)
 
     await OutboxSignal.subscribe(async (publicId: string, event: OutboxEvent) => {
       await outboxProcessor.processSingleEvent(event)
     })
-
-    logger.info('✅ OutboxSignal inscrito e pronto para receber sinais')
-
+    
     startOutboxCron(outboxProcessor)
   } catch (error) {
     logger.fatal({ error }, '🔥 Erro fatal ao iniciar os workers')

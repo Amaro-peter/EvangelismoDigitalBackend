@@ -6,22 +6,27 @@ import { Queue } from 'bullmq'
 export const MAIL_QUEUE_NAME = 'mail-queue'
 
 export interface MailJobData {
-  to: string | undefined
+  to: string
   subject: string
   message: string
   html: string
   context?: Record<string, unknown>
 }
 
+export interface OutboxDispatchData {
+  publicId: string
+  emails: MailJobData[]
+}
+
 attachRedisLogger(redisForQueue)
 
-export const mailQueue = new Queue<MailJobData>(MAIL_QUEUE_NAME, {
+export const mailQueue = new Queue<OutboxDispatchData>(MAIL_QUEUE_NAME, {
   connection: redisForQueue,
   defaultJobOptions: {
     attempts: 3,
     backoff: {
       type: 'exponential',
-      delay: 5000,
+      delay: 10000,
     },
     removeOnComplete: true,
     removeOnFail: true,

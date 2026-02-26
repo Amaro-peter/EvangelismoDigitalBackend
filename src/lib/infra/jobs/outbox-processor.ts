@@ -135,36 +135,14 @@ export class OutboxProcessor {
    */
   async processSingleEvent(event: OutboxEvent): Promise<void> {
     try {
-      const freshEvent = await this.outboxRepository.findByPublicId(event.publicId)
+      // 1. Marca como SENDING para travar o evento
+      await this.outboxRepository.updateStatus(event.publicId, OutboxEventType.SENDING)
 
-      if (!freshEvent) {
-        logger.warn({ eventId: event.publicId }, 'Evento não encontrado no banco de dados. Pode já ter sido deletado.')
-        return
-      }
-
-      // ── Nível 1: Persiste a intenção antes do efeito colateral ──────────────
-      //
-      // A transição PENDING → SENDING é a fronteira de segurança:
-      //
-      //   Com SENDING — cenário seguro:
-      //     1. updateStatus(SENDING)  ✅  ← estado observável e durável
-      //     2. dispatch ao BullMQ     ✅
-      //     3. crash                  💥
-      //     4. cron encontra SENDING há > 30s via findStuck
-      //     5. processSingleEvent → dispatch com mesmo jobId → BullMQ deduplica
-      //     6. delete               ✅
-      //
-      // ────────────────────────────────────────────────────────────────────────
-      await this.outboxRepository.updateStatus(freshEvent.publicId, OutboxEventType.SENDING)
-
-      await this.dispatchToBullMQ(freshEvent)
-
-      await this.outboxRepository.delete(freshEvent.publicId)
+      await this.dispatchToBullMQ(event)
     } catch (error) {
-      logger.error(
-        { eventId: event.publicId, error },
-        '❌ Falha ao processar evento. Ele permanecerá no banco para a próxima tentativa.',
-      )
+      // Se o Redis cair, reverte para PENDING
+      await this.outboxRepository.updateStatus(event.publicId, OutboxEventType.PENDING)
+      logger.error({ publicId: event.publicId, error }, '❌ Falha no dispatch, revertido para PENDING')
     }
   }
 
@@ -178,23 +156,15 @@ export class OutboxProcessor {
     const userJob = strategy.buildUserEmail(payload)
     const staffJob = strategy.buildStaffEmail(payload)
 
-    try {
-      /**
-       * jobId baseado no publicId — Nível 2 da proteção contra duplicatas.
-       *
-       * O BullMQ não reenfileira um job se um job com o mesmo jobId já
-       * existir em estado waiting, delayed ou active. Isso torna o dispatch
-       * idempotente: se processSingleEvent for chamado duas vezes para o
-       * mesmo evento (ex: crash + recuperação), apenas um email será enviado.
-       *
-       * Sufixos '-user' e '-staff' diferenciam os dois jobs do mesmo evento.
-       */
-      await Promise.all([
-        mailQueue.add('user-email', userJob, { jobId: `${event.publicId}-user` }),
-        mailQueue.add('staff-email', staffJob, { jobId: `${event.publicId}-staff` }),
-      ])
-    } catch (error) {
-      throw new Error(`Falha ao conectar com Redis/BullMQ: ${(error as Error).message}`)
-    }
+    await mailQueue.add(
+      'outbox-dispatch',
+      {
+        publicId: event.publicId,
+        emails: [userJob, staffJob],
+      },
+      {
+        jobId: event.publicId,
+      },
+    )
   }
 }

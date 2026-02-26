@@ -38,9 +38,7 @@ const subscriber = new Redis({
 // ---------------------------------------------------------------------------
 // Connection lifecycle events
 // --------------------------------------------------------------
-publisher.on('connect', () => 
-    logger.info('✅ Redis publisher conectado para outbox-signal')
-)
+publisher.on('connect', () => logger.info('✅ Redis publisher conectado ao outbox-signal'))
 
 publisher.on('error', (err) =>
     logger.error({ err }, '❌ Redis publisher error no outbox-signal')
