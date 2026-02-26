@@ -1,4 +1,4 @@
-export function decisionUserTextTemplate(name: string) {
+export function decisionForChristUserTextTemplate(name: string) {
   return `
         Olá ${name}, 
         É uma alegria saber que você tomou uma decisão por Cristo.

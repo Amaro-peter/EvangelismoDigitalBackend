@@ -1,8 +1,7 @@
-export function decisionInternalHtmlTemplate(
+export function decisionForChristStaffHtmlTemplate(
   name: string,
   lastName: string,
   email: string,
-  ipAddress: string | string[],
   location?: string,
 ) {
   return `
@@ -18,9 +17,6 @@ export function decisionInternalHtmlTemplate(
                 </li>
                 <li>
                     Local: ${location ?? 'não informado'}
-                </li>
-                <li>
-                    IP Address: ${ipAddress}
                 </li>
             </ul>
         `

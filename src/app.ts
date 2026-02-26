@@ -10,9 +10,9 @@ import fastifyJwt from '@fastify/jwt'
 import fastifyCors from '@fastify/cors'
 import * as Sentry from '@sentry/node'
 import { nodeProfilingIntegration } from '@sentry/profiling-node'
-import { closeAllRedisConnections } from '@lib/redis/clients'
 import { RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
 import { asyncContext } from '@http/plugins/async-context.plugin'
+import { closeAllRedisConnections } from '@lib/redis/clients/clients'
 z.config(z.locales.pt())
 
 export const app = fastify({

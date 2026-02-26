@@ -1,10 +1,5 @@
 import { Redis } from 'ioredis'
-import {
-  GeoCacheScope,
-  GeocodingProvider,
-  GeoCoordinates,
-  GeoSearchOptions,
-} from '../../core/contracts/providers/geo-provider.interface'
+
 import { logger } from '@lib/logger'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { ResilientCache, ResilientCacheOptions, CachedFailureError } from '@lib/redis/helper/resilient-cache'
@@ -12,6 +7,12 @@ import { NoGeoProviderError } from './error/no-geo-provider-error'
 import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
 import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-found-error'
 import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
+import {
+  GeoCacheScope,
+  GeocodingProvider,
+  GeoCoordinates,
+  GeoSearchOptions,
+} from 'core/contracts/use-cases/providers/geo-provider.interface'
 
 export class ResilientGeoProvider implements GeocodingProvider {
   private readonly cacheManager: ResilientCache

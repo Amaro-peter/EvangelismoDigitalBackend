@@ -1,4 +1,4 @@
-export function decisionInternalSubjectText() {
+export function decisionForChristStaffSubjectText() {
   return `
       Nova decisão por Cristo registrada
     `

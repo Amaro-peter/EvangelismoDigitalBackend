@@ -1,4 +1,4 @@
-export function contactInternalSubjectTextTemplate() {
+export function contactStaffSubjectTextTemplate() {
   return `
             Novo formulário enviado
         `

@@ -60,13 +60,8 @@ export async function sendEmail({
       html,
       ...(attachments ? { attachments } : {}),
     })
-
-    logger.info({ sentTo: to, messageId: info.messageId }, 'Mensagem de e-mail enviada com sucesso')
-
     return info
   } catch (error) {
-    logger.error({ error }, 'Erro ao enviar e-mail')
-
     throw error
   }
 }

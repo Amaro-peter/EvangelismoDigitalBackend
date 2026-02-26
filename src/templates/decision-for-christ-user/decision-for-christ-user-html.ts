@@ -1,4 +1,4 @@
-export function decisionUserHtmlTemplate(name: string) {
+export function decisionForChristUserHtmlTemplate(name: string) {
   return `
             <p>
                 Olá <strong>${name}</strong>,

@@ -1,5 +1,4 @@
 import { AxiosError, AxiosInstance } from 'axios'
-import { AddressData, AddressProvider } from '../../core/contracts/providers/address-provider.interface'
 import { logger } from '@lib/logger'
 import { createHttpClient } from '@lib/http/axios'
 import { EnumProviderConfig, RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
@@ -9,6 +8,7 @@ import Redis from 'ioredis'
 import { AddressProviderFailureError } from './error/address-provider-failure-error'
 import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
+import { AddressData, AddressProvider } from 'core/contracts/use-cases/providers/address-provider.interface'
 
 export interface AwesomeApiConfig {
   apiUrl: string

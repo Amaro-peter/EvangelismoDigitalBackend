@@ -7,6 +7,9 @@ CREATE TYPE "AuthenticationStatus" AS ENUM ('SUCCESS', 'USER_NOT_EXISTS', 'INCOR
 -- CreateEnum
 CREATE TYPE "UserRole" AS ENUM ('ADMIN', 'DEFAULT');
 
+-- CreateEnum
+CREATE TYPE "OutboxEventType" AS ENUM ('PENDING', 'SENDING');
+
 -- CreateTable
 CREATE TABLE "authentication_audit" (
     "id" TEXT NOT NULL,
@@ -58,6 +61,19 @@ CREATE TABLE "form_submissions" (
 );
 
 -- CreateTable
+CREATE TABLE "outbox_events" (
+    "id" SERIAL NOT NULL,
+    "public_id" TEXT NOT NULL,
+    "type" TEXT NOT NULL,
+    "status" "OutboxEventType" NOT NULL DEFAULT 'PENDING',
+    "payload" JSONB NOT NULL,
+    "ocurred_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "sending_at" TIMESTAMP(3),
+
+    CONSTRAINT "outbox_events_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "churches" (
     "id" SERIAL NOT NULL,
     "public_id" TEXT NOT NULL,
@@ -98,6 +114,18 @@ CREATE INDEX "idx_user_token" ON "users"("token");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "form_submissions_public_id_key" ON "form_submissions"("public_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "form_submissions_email_key" ON "form_submissions"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "outbox_events_public_id_key" ON "outbox_events"("public_id");
+
+-- CreateIndex
+CREATE INDEX "outbox_events_status_ocurred_at_idx" ON "outbox_events"("status", "ocurred_at");
+
+-- CreateIndex
+CREATE INDEX "outbox_events_status_sending_at_idx" ON "outbox_events"("status", "sending_at");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "churches_public_id_key" ON "churches"("public_id");

@@ -1,10 +1,6 @@
 import { AxiosInstance, AxiosError } from 'axios'
 import { Redis } from 'ioredis'
-import {
-  GeocodingProvider,
-  GeoCoordinates,
-  GeoSearchOptions,
-} from '../../core/contracts/providers/geo-provider.interface'
+
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { createHttpClient } from '@lib/http/axios'
 import { logger } from '@lib/logger'
@@ -13,6 +9,11 @@ import { PrecisionHelper } from 'providers/helpers/precision-helper'
 import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
 import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
 import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-found-error'
+import {
+  GeocodingProvider,
+  GeoCoordinates,
+  GeoSearchOptions,
+} from 'core/contracts/use-cases/providers/geo-provider.interface'
 
 export interface LocationIqConfig {
   apiUrl: string
