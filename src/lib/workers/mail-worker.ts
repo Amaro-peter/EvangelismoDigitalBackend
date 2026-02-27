@@ -1,5 +1,5 @@
 import { Worker } from 'bullmq'
-import { MAIL_QUEUE_NAME, OutboxDispatchData } from '../mail-queue'
+import { MAIL_QUEUE_NAME } from '../queue/mail-queue'
 import { makeSendEmailUseCase } from '@use-cases/factories/make-send-email-use-case'
 import { attachRedisLogger } from '@lib/redis/connections/redis-bullMQ-connection'
 import { logger } from '@lib/logger'
@@ -8,6 +8,7 @@ import { IOutboxRepository } from 'core/contracts/repository/outbox-repository'
 import { JobAlreadyProcessingError } from '@lib/errors/queue/job-already-processing-error'
 import { SmtpDispatchError } from '@lib/errors/queue/smtp-dispatch-error'
 import { InfrastructureError } from '@lib/errors/infra/infrastructure-error'
+import { OutboxDispatchData } from 'core/contracts/lib/infra/outbox-dispatch-data'
 
 const CONCURRENCY_LIMIT = 5
 

@@ -2,21 +2,9 @@ import { logger } from '@lib/logger'
 import { redisForQueue } from '@lib/redis/clients/clients'
 import { attachRedisLogger } from '@lib/redis/connections/redis-bullMQ-connection'
 import { Queue } from 'bullmq'
+import { OutboxDispatchData } from 'core/contracts/lib/infra/outbox-dispatch-data'
 
 export const MAIL_QUEUE_NAME = 'mail-queue'
-
-export interface MailJobData {
-  to: string
-  subject: string
-  message: string
-  html: string
-  context?: Record<string, unknown>
-}
-
-export interface OutboxDispatchData {
-  publicId: string
-  emails: MailJobData[]
-}
 
 attachRedisLogger(redisForQueue, 'MailQueue')
 

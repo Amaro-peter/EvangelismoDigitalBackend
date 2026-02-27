@@ -1,7 +1,11 @@
 import { PrismaHTTPErrorMapping } from '@lib/prisma/utils/prisma-http-error-mapper'
 import { PrismaInfraErrorMapping } from '@lib/prisma/utils/prisma-infra-error-mapper'
-import { OutboxEventNotFoundHttpError, OutboxEventNotFoundInfraError, OutboxOperationFailedHttpError, OutboxOperationFailedInfraError } from './outbox-erros'
-
+import {
+  OutboxEventNotFoundHttpError,
+  OutboxEventNotFoundInfraError,
+  OutboxOperationFailedHttpError,
+  OutboxOperationFailedInfraError,
+} from './outbox-erros'
 
 export const outboxErrorMapping = {
   // Contexto da API (criação do evento na mesma transação)

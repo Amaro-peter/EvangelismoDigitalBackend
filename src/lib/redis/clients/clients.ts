@@ -1,7 +1,6 @@
-import { createRedisBullMQConnection } from "../connections/redis-bullMQ-connection"
-import { createRedisCacheConnection } from "../connections/redis-cache-connection"
-import { createRedisRateLimiterConnection } from "../connections/redis-rate-limiter-connection"
-
+import { createRedisBullMQConnection } from '../connections/redis-bullMQ-connection'
+import { createRedisCacheConnection } from '../connections/redis-cache-connection'
+import { createRedisRateLimiterConnection } from '../connections/redis-rate-limiter-connection'
 
 // Instâncias Singleton (Lazy loading opcional)
 export const redisCache = createRedisCacheConnection()

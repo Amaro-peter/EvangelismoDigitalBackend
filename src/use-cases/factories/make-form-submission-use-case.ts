@@ -1,4 +1,4 @@
-import { OutboxFormNotificationPublisher } from '@lib/infra/publisher/outbox-notification-publisher'
+import { OutboxFormNotificationPublisher } from '@lib/infra/outbox-publisher/outbox-notification-publisher'
 import { DatabaseContext } from '@lib/prisma/helpers/database-context'
 import { PrismaFormsRepository } from '@repositories/prisma/prisma-forms-repository'
 import { PrismaOutboxRepository } from '@repositories/prisma/prisma-outbox-event-repository'

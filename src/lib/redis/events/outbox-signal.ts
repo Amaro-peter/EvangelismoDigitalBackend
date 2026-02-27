@@ -1,38 +1,38 @@
-import { env } from "@env/index"
-import { logger } from "@lib/logger"
-import { OutboxEvent } from "core/contracts/repository/outbox-repository"
-import Redis from "ioredis"
+import { env } from '@env/index'
+import { logger } from '@lib/logger'
+import { OutboxEvent } from 'core/contracts/repository/outbox-repository'
+import Redis from 'ioredis'
 
 type RedisClient = InstanceType<typeof Redis>
 
 export const CHANNEL_NAME = 'outbox-signal'
 
 const baseConfig = {
-    host: env.REDIS_HOST,
-    port: env.REDIS_PORT,
-    password: env.REDIS_PASSWORD || undefined,
-    lazyConnect: true,
+  host: env.REDIS_HOST,
+  port: env.REDIS_PORT,
+  password: env.REDIS_PASSWORD || undefined,
+  lazyConnect: true,
 }
 
 const publisher = new Redis({
-    ...baseConfig,
-    enableOfflineQueue: true,
-    commandTimeout: 2000,
+  ...baseConfig,
+  enableOfflineQueue: true,
+  commandTimeout: 2000,
 })
 
 const subscriber = new Redis({
-    ...baseConfig,
-    maxRetriesPerRequest: null,
-    enableOfflineQueue: false,
-    retryStrategy: (times) => {
-      const delay = Math.min(Math.pow(2, times) * 100, 5000)
-      logger.warn({ 
-        times,
-        delay,
-      })
+  ...baseConfig,
+  maxRetriesPerRequest: null,
+  enableOfflineQueue: false,
+  retryStrategy: (times) => {
+    const delay = Math.min(Math.pow(2, times) * 100, 5000)
+    logger.warn({
+      times,
+      delay,
+    })
 
-      return delay
-    },
+    return delay
+  },
 })
 
 // ---------------------------------------------------------------------------
@@ -40,25 +40,15 @@ const subscriber = new Redis({
 // --------------------------------------------------------------
 publisher.on('connect', () => logger.info('✅ Redis publisher conectado ao outbox-signal'))
 
-publisher.on('error', (err) =>
-    logger.error({ err }, '❌ Redis publisher error no outbox-signal')
-)
+publisher.on('error', (err) => logger.error({ err }, '❌ Redis publisher error no outbox-signal'))
 
-publisher.on('close', () =>
-    logger.warn('⚠️ Redis publisher connection fechada para outbox-signal')
-)
+publisher.on('close', () => logger.warn('⚠️ Redis publisher connection fechada para outbox-signal'))
 
-subscriber.on('connect', () => 
-    logger.info('✅ Redis subscriber conectado para outbox-signal')
-)
+subscriber.on('connect', () => logger.info('✅ Redis subscriber conectado para outbox-signal'))
 
-subscriber.on('error', (err) =>
-    logger.error({ err }, '❌ Redis subscriber error no outbox-signal')
-)
+subscriber.on('error', (err) => logger.error({ err }, '❌ Redis subscriber error no outbox-signal'))
 
-subscriber.on('close', () =>
-    logger.warn('⚠️ Redis subscriber connection fechada para outbox-signal')
-)
+subscriber.on('close', () => logger.warn('⚠️ Redis subscriber connection fechada para outbox-signal'))
 
 /** Connects a client only if it hasn't connected yet. */
 async function ensureConnected(client: RedisClient, name: string): Promise<void> {
@@ -69,7 +59,7 @@ async function ensureConnected(client: RedisClient, name: string): Promise<void>
 }
 
 type MessageListener = (channel: string, message: string) => void
-let activeMessageListener: MessageListener | null = null 
+let activeMessageListener: MessageListener | null = null
 
 export const OutboxSignal = {
   /**
@@ -108,13 +98,13 @@ export const OutboxSignal = {
     try {
       await ensureConnected(subscriber, 'OutboxSubscriber')
 
-      if(activeMessageListener !== null) {
+      if (activeMessageListener !== null) {
         subscriber.off('message', activeMessageListener)
         logger.info('Listener anterior de OutboxSignal removido com sucesso')
       }
 
       activeMessageListener = async (channel: string, message: string) => {
-        if(channel !== CHANNEL_NAME) {
+        if (channel !== CHANNEL_NAME) {
           logger.warn({ channel }, 'Mensagem recebida em canal inesperado. Ignorando.')
           return
         }
@@ -122,7 +112,7 @@ export const OutboxSignal = {
         try {
           const parsed = JSON.parse(message)
           await onSignal(parsed.publicId, parsed.event)
-        } catch(err) {
+        } catch (err) {
           logger.error({ err, publicId: message }, 'Erro ao processar sinal de Outbox')
         }
       }

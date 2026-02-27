@@ -1,9 +1,4 @@
-export function decisionForChristStaffHtmlTemplate(
-  name: string,
-  lastName: string,
-  email: string,
-  location?: string,
-) {
+export function decisionForChristStaffHtmlTemplate(name: string, lastName: string, email: string, location?: string) {
   return `
             <p>
                 Nova decisão por Cristo:

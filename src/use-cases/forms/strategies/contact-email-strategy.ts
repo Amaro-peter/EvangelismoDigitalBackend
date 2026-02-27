@@ -1,4 +1,3 @@
-import { MailJobData } from '@lib/queue/mail-queue'
 import { IFormEmailStrategy } from 'core/contracts/use-cases/forms/email-strategy.interface'
 import { contactUserSubjectTextTemplate } from '@templates/contact-user/contact-user-subject-text'
 import { contactUserTextTemplate } from '@templates/contact-user/contact-user-text'
@@ -7,6 +6,8 @@ import { contactStaffSubjectTextTemplate } from '@templates/contact-staff/contac
 import { contactStaffTextTemplate } from '@templates/contact-staff/contact-staff-text'
 import { contactStaffHtmlTemplate } from '@templates/contact-staff/contact-staff-html'
 import { FormPayload } from 'core/types/use-cases/forms/form-payload'
+import { MailJobData } from 'core/contracts/lib/queue/mail-job-data'
+import { env } from '@env/index'
 
 export class ContactEmailStrategy implements IFormEmailStrategy {
   buildUserEmail(form: FormPayload): MailJobData {
@@ -28,7 +29,7 @@ export class ContactEmailStrategy implements IFormEmailStrategy {
     const lastName = this.getOptionalStringField(form.lastName, 'form.lastName')
 
     return {
-      to: process.env.ADMIN_EMAIL,
+      to: env.ADMIN_EMAIL,
       subject: contactStaffSubjectTextTemplate(),
       message: contactStaffTextTemplate(name, email),
       html: contactStaffHtmlTemplate(name, lastName, email),

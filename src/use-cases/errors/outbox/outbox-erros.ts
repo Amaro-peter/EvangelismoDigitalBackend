@@ -1,8 +1,10 @@
 import { HTTPDomainError } from '@http/errors/http-domain-error'
 import { HTTPSystemError } from '@http/errors/http-system-error'
 import { InfrastructureError } from '@lib/errors/infra/infrastructure-error'
-import { OUTBOX_EVENT_NOT_FOUND_ERROR, OUTBOX_OPERATION_FAILED_ERROR } from 'messages/errors/outbox-error-messages'
-
+import {
+  OUTBOX_EVENT_NOT_FOUND_ERROR,
+  OUTBOX_OPERATION_FAILED_ERROR,
+} from 'messages/errors/use-cases/outbox-events/outbox-error-messages'
 
 // --- Contexto HTTP (Disparado pela API durante o cadastro) ---
 export class OutboxEventNotFoundHttpError extends HTTPDomainError {

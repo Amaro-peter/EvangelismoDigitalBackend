@@ -49,19 +49,15 @@ export async function sendEmail({
   html,
   attachments,
 }: SendEmailRequest): Promise<SentMessageInfo> {
-  try {
-    const emailTransporter = await getTransporter()
+  const emailTransporter = await getTransporter()
 
-    const info = await emailTransporter.sendMail({
-      from: env.SMTP_EMAIL,
-      to,
-      subject,
-      text: message,
-      html,
-      ...(attachments ? { attachments } : {}),
-    })
-    return info
-  } catch (error) {
-    throw error
-  }
+  const info = await emailTransporter.sendMail({
+    from: env.SMTP_EMAIL,
+    to,
+    subject,
+    text: message,
+    html,
+    ...(attachments ? { attachments } : {}),
+  })
+  return info
 }

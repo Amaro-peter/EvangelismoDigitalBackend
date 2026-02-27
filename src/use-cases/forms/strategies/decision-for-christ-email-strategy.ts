@@ -1,4 +1,3 @@
-import { MailJobData } from '@lib/queue/mail-queue'
 import { IFormEmailStrategy } from 'core/contracts/use-cases/forms/email-strategy.interface'
 import { decisionForChristUserSubjectText } from '@templates/decision-for-christ-user/decision-for-christ-user-subject-text'
 import { decisionForChristUserTextTemplate } from '@templates/decision-for-christ-user/decision-for-christ-user-text'
@@ -7,6 +6,8 @@ import { decisionForChristStaffSubjectText } from '@templates/decision-for-chris
 import { decisionForChristStaffTextTemplate } from '@templates/decision-for-christ-staff/decision-for-christ-staff-text'
 import { decisionForChristStaffHtmlTemplate } from '@templates/decision-for-christ-staff/decision-for-christ-staff-html'
 import { FormPayload } from 'core/types/use-cases/forms/form-payload'
+import { MailJobData } from 'core/contracts/lib/queue/mail-job-data'
+import { env } from '@env/index'
 
 export class DecisionForChristEmailStrategy implements IFormEmailStrategy {
   buildUserEmail(form: FormPayload): MailJobData {
@@ -29,7 +30,7 @@ export class DecisionForChristEmailStrategy implements IFormEmailStrategy {
     const location = this.getOptionalStringField(form.location, 'form.location')
 
     return {
-      to: process.env.ADMIN_EMAIL,
+      to: env.ADMIN_EMAIL,
       subject: decisionForChristStaffSubjectText(),
       message: decisionForChristStaffTextTemplate(name, email),
       html: decisionForChristStaffHtmlTemplate(name, lastName, email, location),
