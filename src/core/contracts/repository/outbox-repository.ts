@@ -1,3 +1,4 @@
+import { Result } from 'core/shared/result'
 import { FormPayload } from 'core/types/use-cases/forms/form-payload'
 
 export enum OutboxEventType {
@@ -18,26 +19,14 @@ export interface OutboxEvent {
   status: OutboxEventType
   payload: unknown
   occurredAt: Date
-  sendingAt: Date | null
+  sendingAt: Date | undefined
 }
 
 export interface IOutboxRepository {
-  create(data: OutBoxEventInputData): Promise<OutboxEvent>
-  findPending(limit: number): Promise<OutboxEvent[]>
-  /**
-   * Retorna eventos com status SENDING cujo sendingAt é mais antigo que `thresholdMs`.
-   *
-   * Esses eventos iniciaram o dispatch mas não foram deletados — sinal de crash
-   * entre o updateStatus(SENDING) e o delete. O cron de recuperação os reprocessa.
-   *
-   * O BullMQ descartará jobs duplicados graças ao jobId baseado no publicId,
-   * garantindo que o reenvio ao BullMQ seja idempotente.
-   *
-   * @param thresholdMs - Tempo mínimo em ms que o evento deve estar SENDING
-   *                      para ser considerado travado. Valor sugerido: 30_000.
-   */
-  findStuck(thresholdMs: number): Promise<OutboxEvent[]>
-  updateStatus(publicId: string, status: OutboxEventType): Promise<void>
-  findByPublicId(publicId: string): Promise<OutboxEvent | null>
-  delete(publicId: string): Promise<void>
+  create(data: OutBoxEventInputData): Promise<Result<OutboxEvent, Error>>
+  findPending(limit: number): Promise<Result<OutboxEvent[], Error>>
+  findStuck(stuckBefore: Date): Promise<Result<OutboxEvent[], Error>>
+  findByPublicId(publicId: string): Promise<Result<OutboxEvent | null, Error>>
+  updateStatus(publicId: string, status: OutboxEventType): Promise<Result<void, Error>>
+  delete(publicId: string): Promise<Result<void, Error>>
 }

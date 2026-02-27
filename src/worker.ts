@@ -26,7 +26,20 @@ async function bootstrap() {
     await OutboxSignal.subscribe(async (publicId: string, event: OutboxEvent) => {
       await outboxProcessor.processSingleEvent(event)
     })
-    
+
+    // ============================================================================
+    // @TODO: [ALERTA DE ESCALABILIDADE HORIZONTAL]
+    // Se a infraestrutura for escalada para mais de um worker/pod, TODOS os pods
+    // rodarão este cron simultaneamente. Embora a classe OutboxProcessor já utilize
+    // um DistributedLock para evitar processamento duplicado, ter múltiplos crons
+    // competindo pelo mesmo lock gera overhead e contenção no Redis/DB.
+    //
+    // SUGESTÃO DE ARQUITETURA:
+    // Implementar um sistema de "Leader Election" (Eleição de Líder).
+    // Antes de rodar a rotina do cron, os workers disputam uma chave no Redis
+    // (ex: usando SETNX com TTL de 1 minuto). O worker que conseguir o lock atua
+    // como "Líder" e executa a varredura, enquanto os outros ficam em standby.
+    // ============================================================================
     startOutboxCron(outboxProcessor)
   } catch (error) {
     logger.fatal({ error }, '🔥 Erro fatal ao iniciar os workers')

@@ -61,7 +61,14 @@ export class FormsSubmissionUseCase {
     // Salva o evento na tabela 'outbox_events' NA MESMA TRANSAÇÃO do formulário
     const outboxEvent = await this.notificationPublisher.publishToOutbox(sanitizedFormSubmission)
 
+    if (outboxEvent.success === false) {
+      return err(outboxEvent.error)
+    }
+
     // 4. Retorno de Sucesso
-    return ok({ sanitizedFormSubmission, outboxEvent })
+    return ok({
+      sanitizedFormSubmission,
+      outboxEvent: outboxEvent.value,
+    })
   }
 }

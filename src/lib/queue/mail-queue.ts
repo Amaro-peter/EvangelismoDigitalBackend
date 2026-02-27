@@ -18,7 +18,7 @@ export interface OutboxDispatchData {
   emails: MailJobData[]
 }
 
-attachRedisLogger(redisForQueue)
+attachRedisLogger(redisForQueue, 'MailQueue')
 
 export const mailQueue = new Queue<OutboxDispatchData>(MAIL_QUEUE_NAME, {
   connection: redisForQueue,

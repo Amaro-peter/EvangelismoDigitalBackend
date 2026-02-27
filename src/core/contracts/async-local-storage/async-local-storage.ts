@@ -1,4 +1,4 @@
-import { PrismaTransactionClient } from '@lib/infra/prisma/prisma-transaction-client'
+import { PrismaTransactionClient } from '@lib/prisma/helpers/prisma-transaction-client'
 
 export interface IAsyncContext {
   requestId: string

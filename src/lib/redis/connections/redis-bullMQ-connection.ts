@@ -19,9 +19,9 @@ export function createRedisBullMQConnection() {
   })
 }
 
-export function attachRedisLogger(redis: Redis) {
-  redis.on('connect', () => logger.info('🔗 Redis (Worker) connection established'))
-  redis.on('ready', () => logger.info('✅ Redis (Worker) is ready'))
+export function attachRedisLogger(redis: Redis, context: string) {
+  redis.on('connect', () => logger.info(`🔗 Redis (${context}) connection established`))
+  redis.on('ready', () => logger.info(`✅ Redis (${context}) is ready`))
   // Silencia erros de reconexão normais, loga apenas se for crítico
   redis.on('error', (error) => {
     // Evita spam de logs se o Redis estiver reiniciando
