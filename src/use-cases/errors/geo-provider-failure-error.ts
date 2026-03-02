@@ -1,4 +1,4 @@
-import { messages } from '@constants/messages'
+import { messages } from 'core/constants/messages'
 
 export class GeoProviderFailureError extends Error {
   private readonly originalReason: unknown

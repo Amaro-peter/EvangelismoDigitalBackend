@@ -5,9 +5,9 @@ import { outboxErrorMapping } from '@use-cases/errors/outbox/outbox-error-mapper
 import { err, ok, Result } from 'core/shared/result'
 import {
   IOutboxRepository,
-  OutboxEvent,
-  OutBoxEventInputData,
-  OutboxEventType,
+  IOutboxEvent,
+  IOutBoxEventInputData,
+  IOutboxEventType,
 } from 'core/contracts/repository/outbox-repository'
 import { PrismaHTTPErrorMapper } from '@lib/prisma/utils/prisma-http-error-mapper'
 
@@ -17,7 +17,7 @@ export class PrismaOutboxRepository implements IOutboxRepository {
 
   constructor(private readonly dbContext: DatabaseContext) {}
 
-  async create(data: OutBoxEventInputData): Promise<Result<OutboxEvent, Error>> {
+  async create(data: IOutBoxEventInputData): Promise<Result<IOutboxEvent, Error>> {
     try {
       const outboxEvent = await this.dbContext.client.outboxEvent.create({
         data: {
@@ -34,10 +34,10 @@ export class PrismaOutboxRepository implements IOutboxRepository {
     }
   }
 
-  async findPending(limit: number): Promise<Result<OutboxEvent[], Error>> {
+  async findPending(limit: number): Promise<Result<IOutboxEvent[], Error>> {
     try {
       const events = await this.dbContext.client.outboxEvent.findMany({
-        where: { status: OutboxEventType.PENDING },
+        where: { status: IOutboxEventType.PENDING },
         orderBy: { occurredAt: 'asc' },
         take: limit,
       })
@@ -50,11 +50,11 @@ export class PrismaOutboxRepository implements IOutboxRepository {
     }
   }
 
-  async findStuck(stuckBefore: Date): Promise<Result<OutboxEvent[], Error>> {
+  async findStuck(stuckBefore: Date): Promise<Result<IOutboxEvent[], Error>> {
     try {
       const events = await this.dbContext.client.outboxEvent.findMany({
         where: {
-          status: OutboxEventType.SENDING,
+          status: IOutboxEventType.SENDING,
           sendingAt: { lte: stuckBefore },
         },
         orderBy: { sendingAt: 'asc' },
@@ -67,7 +67,7 @@ export class PrismaOutboxRepository implements IOutboxRepository {
     }
   }
 
-  async findByPublicId(publicId: string): Promise<Result<OutboxEvent | null, Error>> {
+  async findByPublicId(publicId: string): Promise<Result<IOutboxEvent | null, Error>> {
     try {
       const event = await this.dbContext.client.outboxEvent.findUnique({
         where: { publicId },
@@ -80,13 +80,13 @@ export class PrismaOutboxRepository implements IOutboxRepository {
     }
   }
 
-  async updateStatus(publicId: string, status: OutboxEventType): Promise<Result<void, Error>> {
+  async updateStatus(publicId: string, status: IOutboxEventType): Promise<Result<void, Error>> {
     try {
       await this.dbContext.client.outboxEvent.update({
         where: { publicId },
         data: {
           status,
-          ...(status === OutboxEventType.SENDING && { sendingAt: new Date() }),
+          ...(status === IOutboxEventType.SENDING && { sendingAt: new Date() }),
         },
       })
       return ok(undefined)
@@ -118,12 +118,12 @@ export class PrismaOutboxRepository implements IOutboxRepository {
     payload: unknown
     occurredAt: Date
     sendingAt: Date | null
-  }): OutboxEvent {
+  }): IOutboxEvent {
     return {
       id: raw.id,
       publicId: raw.publicId,
       type: raw.type,
-      status: raw.status as OutboxEventType,
+      status: raw.status as IOutboxEventType,
       payload: raw.payload,
       occurredAt: raw.occurredAt,
       sendingAt: raw.sendingAt || undefined,

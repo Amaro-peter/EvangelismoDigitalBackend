@@ -1,12 +1,12 @@
-import { IFormNotificationPublisher } from 'core/contracts/infra/form-notification-publisher'
-import { IOutboxRepository, OutboxEvent, OutboxEventType } from 'core/contracts/repository/outbox-repository'
+import { IFormNotificationPublisher } from 'core/contracts/lib/infra/form-notification-publisher'
+import { IOutboxRepository, IOutboxEvent, IOutboxEventType } from 'core/contracts/repository/outbox-repository'
 import { Result } from 'core/shared/result'
 import { FormPayload } from 'core/types/use-cases/forms/form-payload'
 
 export class OutboxFormNotificationPublisher implements IFormNotificationPublisher {
   constructor(private outboxRepository: IOutboxRepository) {}
 
-  async publishToOutbox(form: FormPayload): Promise<Result<OutboxEvent, Error>> {
+  async publishToOutbox(form: FormPayload): Promise<Result<IOutboxEvent, Error>> {
     const payload = {
       name: form.name,
       email: form.email,
@@ -17,7 +17,7 @@ export class OutboxFormNotificationPublisher implements IFormNotificationPublish
 
     // Usa o novo método create com o formato InputData
     const outboxEvent = await this.outboxRepository.create({
-      status: OutboxEventType.PENDING,
+      status: IOutboxEventType.PENDING,
       type: 'FormSubmissionCreated',
       payload,
     })

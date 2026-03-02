@@ -1,4 +1,4 @@
-import { messages } from '@constants/messages'
+import { messages } from 'core/constants/messages'
 import { FastifyJWT } from '@fastify/jwt'
 import { UserRole } from 'core/contracts/repository/users-repository'
 import { FastifyReply, FastifyRequest } from 'fastify'

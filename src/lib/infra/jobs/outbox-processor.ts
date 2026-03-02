@@ -1,16 +1,17 @@
+import { LOCK_KEYS, LOCK_TTL_MS } from 'core/constants/outbox/locks'
+import { JOB_NAMES } from 'core/constants/queue/queue'
 import { logger } from '@lib/logger'
 import { mailQueue } from '@lib/queue/mail-queue'
 import { DistributedLock, LockToken } from '@lib/redis/helper/distributed-lock'
 import { ContactEmailStrategy } from '@use-cases/forms/strategies/contact-email-strategy'
 import { DecisionForChristEmailStrategy } from '@use-cases/forms/strategies/decision-for-christ-email-strategy'
-import { IOutboxRepository, OutboxEvent, OutboxEventType } from 'core/contracts/repository/outbox-repository'
+import { IOutboxRepository, IOutboxEvent, IOutboxEventType } from 'core/contracts/repository/outbox-repository'
 import { FormPayload } from 'core/types/use-cases/forms/form-payload'
-
-const STUCK_SENDING_THRESHOLD_MS = 30_000
+import { OUTBOX_THRESHOLDS } from 'core/constants/outbox/outbox-thresholds'
 
 export class OutboxProcessor {
-  private readonly LOCK_KEY = 'lock:outbox-processor'
-  private readonly LOCK_TTL_MS = 10_000
+  private readonly LOCK_KEY = LOCK_KEYS.OUTBOX_PROCESSOR
+  private readonly LOCK_TTL_MS = LOCK_TTL_MS.DEFAULT
 
   constructor(private outboxRepository: IOutboxRepository) {}
 
@@ -24,7 +25,7 @@ export class OutboxProcessor {
         return
       }
 
-      const pendingEventsResult = await this.outboxRepository.findPending(100)
+      const pendingEventsResult = await this.outboxRepository.findPending(OUTBOX_THRESHOLDS.PENDING_FETCH_LIMIT)
 
       // Verificação do Result
       if (pendingEventsResult.success === false) {
@@ -52,14 +53,13 @@ export class OutboxProcessor {
   }
 
   async recoverStuckSendingEvents(): Promise<void> {
-    const RECOVERY_LOCK_KEY = 'lock:outbox-recovery'
     let lockToken: LockToken | null = null
 
     try {
-      lockToken = await DistributedLock.acquire(RECOVERY_LOCK_KEY, this.LOCK_TTL_MS)
+      lockToken = await DistributedLock.acquire(LOCK_KEYS.OUTBOX_RECOVERY, this.LOCK_TTL_MS)
       if (!lockToken) return
 
-      const thresholdDate = new Date(Date.now() - STUCK_SENDING_THRESHOLD_MS)
+      const thresholdDate = new Date(Date.now() - OUTBOX_THRESHOLDS.STUCK_SENDING_MS)
       const stuckEventsResult = await this.outboxRepository.findStuck(thresholdDate)
 
       // Verificação do Result
@@ -73,7 +73,7 @@ export class OutboxProcessor {
       if (stuckEvents.length > 0) {
         logger.warn(`♻️ Encontrados ${stuckEvents.length} eventos travados em SENDING. Iniciando recuperação...`)
         for (const event of stuckEvents) {
-          await DistributedLock.renew(RECOVERY_LOCK_KEY, lockToken, this.LOCK_TTL_MS)
+          await DistributedLock.renew(LOCK_KEYS.OUTBOX_RECOVERY, lockToken, this.LOCK_TTL_MS)
           await this.processSingleEvent(event)
         }
       }
@@ -81,21 +81,21 @@ export class OutboxProcessor {
       logger.error({ error }, '❌ Erro crítico inesperado no recoverStuckSendingEvents')
     } finally {
       if (lockToken) {
-        await DistributedLock.release(RECOVERY_LOCK_KEY, lockToken)
+        await DistributedLock.release(LOCK_KEYS.OUTBOX_RECOVERY, lockToken)
       }
     }
   }
 
-  async processSingleEvent(event: OutboxEvent): Promise<void> {
+  async processSingleEvent(event: IOutboxEvent): Promise<void> {
     try {
-      const updateResult = await this.outboxRepository.updateStatus(event.publicId, OutboxEventType.SENDING)
+      const updateResult = await this.outboxRepository.updateStatus(event.publicId, IOutboxEventType.SENDING)
 
       // Se não conseguimos atualizar para SENDING, jogamos para o catch reverter
       if (updateResult.success === false) throw updateResult.error
 
       await this.dispatchToBullMQ(event)
     } catch (error) {
-      const revertResult = await this.outboxRepository.updateStatus(event.publicId, OutboxEventType.PENDING)
+      const revertResult = await this.outboxRepository.updateStatus(event.publicId, IOutboxEventType.PENDING)
 
       if (revertResult.success === false) {
         logger.error(
@@ -108,7 +108,7 @@ export class OutboxProcessor {
     }
   }
 
-  private async dispatchToBullMQ(event: OutboxEvent): Promise<void> {
+  private async dispatchToBullMQ(event: IOutboxEvent): Promise<void> {
     const payload = event.payload as FormPayload
 
     const strategy = payload.decisaoPorCristo ? new DecisionForChristEmailStrategy() : new ContactEmailStrategy()
@@ -117,7 +117,7 @@ export class OutboxProcessor {
     const staffJob = strategy.buildStaffEmail(payload)
 
     await mailQueue.add(
-      'outbox-dispatch',
+      JOB_NAMES.OUTBOX_DISPATCH,
       {
         publicId: event.publicId,
         emails: [userJob, staffJob],

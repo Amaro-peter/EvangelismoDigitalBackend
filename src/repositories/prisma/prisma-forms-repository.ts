@@ -1,11 +1,10 @@
 import { DatabaseContext } from '@lib/prisma/helpers/database-context'
-import { Prisma } from '@prisma/client'
-import { FormsRepository } from 'core/contracts/repository/forms-repository'
+import { FormsRepository, FormSubmissionData } from 'core/contracts/repository/forms-repository'
 
 export class PrismaFormsRepository implements FormsRepository {
   constructor(private readonly dbContext: DatabaseContext) {}
 
-  async create(data: Prisma.FormSubmissionCreateInput) {
+  async create(data: FormSubmissionData) {
     return await this.dbContext.client.formSubmission.create({
       data,
     })

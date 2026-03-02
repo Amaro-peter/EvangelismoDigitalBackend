@@ -1,6 +1,5 @@
 import { AxiosInstance, AxiosError } from 'axios'
 import { Redis } from 'ioredis'
-
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { createHttpClient } from '@lib/http/axios'
 import { logger } from '@lib/logger'

@@ -1,10 +1,10 @@
 import { FastifyReply, FastifyRequest } from 'fastify'
 import { formsSchema } from '@http/schemas/forms/forms-schema'
-import { makeFormSubmissionUseCase } from '@use-cases/factories/make-form-submission-use-case'
+import { makeFormSubmissionUseCase } from '@use-cases/forms/factories/make-form-submission-use-case'
 import { FormSubmissionError } from '@use-cases/errors/form-submission-error'
 import { logger } from '@lib/logger'
 import { UserAlreadyExistsError } from '@use-cases/errors/user-already-exists-error'
-import { OutboxSignal } from '@lib/redis/events/outbox-signal'
+import { OutboxSignal } from '@lib/infra/events/outbox-signal'
 
 export async function formSubmission(request: FastifyRequest, reply: FastifyReply) {
   // 1. Validação de Entrada (Zod)

@@ -5,7 +5,7 @@ import { UserPresenter } from '@http/presenters/user-presenter'
 import { makeUpdateUserUseCase } from '@use-cases/factories/make-update-user-use-case'
 import { updateSchema } from '@http/schemas/users/update-schema'
 import { publicIdSchema } from '@http/schemas/utils/public-id-schema'
-import { messages } from '@constants/messages'
+import { messages } from 'core/constants/messages'
 
 export async function updateUser(request: FastifyRequest, reply: FastifyReply) {
   try {

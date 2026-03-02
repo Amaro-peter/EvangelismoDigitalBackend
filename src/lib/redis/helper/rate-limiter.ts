@@ -2,6 +2,7 @@ import Redis from 'ioredis'
 import { RateLimiterRedis } from 'rate-limiter-flexible'
 import { NoRateLimiterSetError } from '../errors/noRateLimiterSetError'
 import { logger } from '@lib/logger'
+import { REDIS_KEYS } from 'core/constants/redis/redis-keys'
 
 /**
  * DESIGN DECISION — Rate Limiting Strategy
@@ -124,7 +125,7 @@ export class RedisRateLimiter {
 
     const limiter = new RateLimiterRedis({
       storeClient: this.redis,
-      keyPrefix: `ratelimit:v1:${provider}`,
+      keyPrefix: `${REDIS_KEYS.RATE_LIMIT_PREFIX}${provider}`,
       points: config.points,
       duration: config.windowSeconds,
       execEvenly: false,

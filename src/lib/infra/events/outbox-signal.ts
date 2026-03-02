@@ -1,11 +1,8 @@
+import { REDIS_CHANNELS } from 'core/constants/redis/redis-channells'
 import { env } from '@env/index'
 import { logger } from '@lib/logger'
-import { OutboxEvent } from 'core/contracts/repository/outbox-repository'
+import { IOutboxEvent } from 'core/contracts/repository/outbox-repository'
 import Redis from 'ioredis'
-
-type RedisClient = InstanceType<typeof Redis>
-
-export const CHANNEL_NAME = 'outbox-signal'
 
 const baseConfig = {
   host: env.REDIS_HOST,
@@ -51,7 +48,7 @@ subscriber.on('error', (err) => logger.error({ err }, '❌ Redis subscriber erro
 subscriber.on('close', () => logger.warn('⚠️ Redis subscriber connection fechada para outbox-signal'))
 
 /** Connects a client only if it hasn't connected yet. */
-async function ensureConnected(client: RedisClient, name: string): Promise<void> {
+async function ensureConnected(client: Redis, name: string): Promise<void> {
   if (client.status === 'wait' || client.status === 'close') {
     logger.info(`Conectando ${name}...`)
     await client.connect()
@@ -69,10 +66,10 @@ export const OutboxSignal = {
    *
    * Call this from your Controller/Service *after* the DB transaction commits.
    */
-  async publishNewItem(publicId: string, event: OutboxEvent): Promise<void> {
+  async publishNewItem(publicId: string, event: IOutboxEvent): Promise<void> {
     try {
       await ensureConnected(publisher, 'OutboxPublisher')
-      await publisher.publish(CHANNEL_NAME, JSON.stringify({ publicId, event }))
+      await publisher.publish(REDIS_CHANNELS.OUTBOX_SIGNAL, JSON.stringify({ publicId, event }))
     } catch (err) {
       logger.warn(
         { err },
@@ -94,7 +91,7 @@ export const OutboxSignal = {
    *                   Errors thrown here are caught and logged — they won't
    *                   crash the worker process.
    */
-  async subscribe(onSignal: (publicId: string, event: OutboxEvent) => Promise<void>): Promise<void> {
+  async subscribe(onSignal: (publicId: string, event: IOutboxEvent) => Promise<void>): Promise<void> {
     try {
       await ensureConnected(subscriber, 'OutboxSubscriber')
 
@@ -104,7 +101,7 @@ export const OutboxSignal = {
       }
 
       activeMessageListener = async (channel: string, message: string) => {
-        if (channel !== CHANNEL_NAME) {
+        if (channel !== REDIS_CHANNELS.OUTBOX_SIGNAL) {
           logger.warn({ channel }, 'Mensagem recebida em canal inesperado. Ignorando.')
           return
         }
@@ -119,7 +116,7 @@ export const OutboxSignal = {
 
       subscriber.on('message', activeMessageListener)
 
-      await subscriber.subscribe(CHANNEL_NAME)
+      await subscriber.subscribe(REDIS_CHANNELS.OUTBOX_SIGNAL)
     } catch (err) {
       logger.error({ err }, '❌ Erro ao subscrever ao canal de OutboxSignal')
     }

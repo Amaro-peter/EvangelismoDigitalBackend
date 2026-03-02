@@ -3,6 +3,7 @@ import { OutboxProcessor } from './outbox-processor'
 import { logger } from '@lib/logger'
 import { PrismaOutboxRepository } from '@repositories/prisma/prisma-outbox-event-repository'
 import { DatabaseContext } from '@lib/prisma/helpers/database-context'
+import { CRON_SCHEDULES } from 'core/constants/cron/cron'
 
 export function startOutboxCron(existingProcessor?: OutboxProcessor) {
   /**
@@ -18,7 +19,7 @@ export function startOutboxCron(existingProcessor?: OutboxProcessor) {
    * 2. processEvents — processa eventos PENDING que não foram disparados
    *    via OutboxSignal (ex: worker estava fora do ar no momento da escrita).
    */
-  cron.schedule('0 0 0 * * *', async () => {
+  cron.schedule(CRON_SCHEDULES.MIDNIGHT_DAILY, async () => {
     logger.info('⏰ Cron de meia-noite: iniciando varredura de segurança da Outbox...')
 
     const processor = existingProcessor ?? buildProcessor()

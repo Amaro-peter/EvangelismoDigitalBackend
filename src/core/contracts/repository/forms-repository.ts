@@ -1,6 +1,14 @@
 import { FormSubmission, Prisma } from '@prisma/client'
 
+export interface FormSubmissionData {
+  name: string
+  lastName: string
+  email: string
+  decisaoPorCristo: boolean
+  location?: string
+}
+
 export interface FormsRepository {
-  create(data: Prisma.FormSubmissionCreateInput): Promise<FormSubmission>
+  create(data: FormSubmissionData): Promise<FormSubmission>
   findByEmail(email: string): Promise<FormSubmission | null>
 }

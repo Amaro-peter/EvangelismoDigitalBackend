@@ -1,5 +1,4 @@
 import { Worker } from 'bullmq'
-import { MAIL_QUEUE_NAME } from '../queue/mail-queue'
 import { makeSendEmailUseCase } from '@use-cases/factories/make-send-email-use-case'
 import { attachRedisLogger } from '@lib/redis/connections/redis-bullMQ-connection'
 import { logger } from '@lib/logger'
@@ -9,22 +8,29 @@ import { JobAlreadyProcessingError } from '@lib/errors/queue/job-already-process
 import { SmtpDispatchError } from '@lib/errors/queue/smtp-dispatch-error'
 import { InfrastructureError } from '@lib/errors/infra/infrastructure-error'
 import { OutboxDispatchData } from 'core/contracts/lib/infra/outbox-dispatch-data'
-
-const CONCURRENCY_LIMIT = 5
+import { QUEUE_NAMES } from 'core/constants/queue/queue'
+import { REDIS_KEYS } from 'core/constants/redis/redis-keys'
+import { IDEMPOTENCY_TTL, MAIL_WORKER_CONFIG } from 'core/constants/workers/workers'
 
 export async function startMailWorker(outboxRepository: IOutboxRepository) {
   const workerConnection = createWorkerConnection()
   attachRedisLogger(workerConnection, 'MailWorker')
 
   const worker = new Worker<OutboxDispatchData>(
-    MAIL_QUEUE_NAME,
+    QUEUE_NAMES.MAIL,
     async (job) => {
       const { publicId, emails } = job.data
       const childLogger = logger.child({ jobId: job.id, publicId })
 
-      const idempotencyKey = `idempotency:email:${publicId}`
+      const idempotencyKey = `${REDIS_KEYS.IDEMPOTENCY_EMAIL_PREFIX}${publicId}`
 
-      const acquired = await redisCache.set(idempotencyKey, 'processing', 'EX', 300, 'NX')
+      const acquired = await redisCache.set(
+        idempotencyKey,
+        'processing',
+        'EX',
+        IDEMPOTENCY_TTL.PROCESSING_SECONDS,
+        'NX',
+      )
 
       if (!acquired) {
         const status = await redisCache.get(idempotencyKey)
@@ -51,7 +57,7 @@ export async function startMailWorker(outboxRepository: IOutboxRepository) {
 
         childLogger.info('✅ Lote de e-mails processado com sucesso.')
 
-        await redisCache.set(idempotencyKey, 'completed', 'EX', 86400)
+        await redisCache.set(idempotencyKey, 'completed', 'EX', IDEMPOTENCY_TTL.COMPLETED_SECONDS)
 
         const deleteResult = await outboxRepository.delete(publicId)
 
@@ -75,9 +81,9 @@ export async function startMailWorker(outboxRepository: IOutboxRepository) {
     },
     {
       connection: workerConnection,
-      concurrency: CONCURRENCY_LIMIT,
-      lockDuration: 300_000,
-      stalledInterval: 300_000,
+      concurrency: MAIL_WORKER_CONFIG.CONCURRENCY_LIMIT,
+      lockDuration: MAIL_WORKER_CONFIG.LOCK_DURATION_MS,
+      stalledInterval: MAIL_WORKER_CONFIG.STALLED_INTERVAL_MS,
     },
   )
 

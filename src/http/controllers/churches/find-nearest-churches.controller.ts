@@ -17,6 +17,7 @@ import { ServiceOverloadError } from '@lib/redis/errors/service-overload-error'
 import { AddressProviderFailureError } from 'providers/address-provider/error/address-provider-failure-error'
 import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
 import { CepToLatLonError } from '@use-cases/errors/cep-to-lat-lon-error'
+import { env } from '@env/index'
 
 export async function findNearestChurches(
   request: FastifyRequest<{ Querystring: { cep: string } }>,
@@ -25,7 +26,7 @@ export async function findNearestChurches(
   try {
     const cep = cepSchema.parse(request.query.cep)
 
-    if (process.env.NODE_ENV !== 'production' || Math.random() < 0.1) {
+    if (env.NODE_ENV !== 'production' || Math.random() < 0.1) {
       logger.info({
         msg: 'Cep do usuário recebido para encontrar igrejas próximas',
         ip: request.ip,
@@ -35,7 +36,7 @@ export async function findNearestChurches(
     const cepToLatLonUseCase = makeCepToLatLonUseCase()
     const { userLat, userLon, precision, providerName } = await cepToLatLonUseCase.execute({ cep })
 
-    if (process.env.NODE_ENV !== 'production' || Math.random() < 0.1) {
+    if (env.NODE_ENV !== 'production' || Math.random() < 0.1) {
       logger.info({
         msg: 'Coordenadas obtidas a partir do CEP',
         userLat,
@@ -59,7 +60,7 @@ export async function findNearestChurches(
       nearbyChurch,
     })
 
-    if (process.env.NODE_ENV !== 'production' || Math.random() < 0.1) {
+    if (env.NODE_ENV !== 'production' || Math.random() < 0.1) {
       logger.info({
         msg: 'Igrejas mais próximas encontradas com sucesso',
         totalFound,

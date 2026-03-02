@@ -1,23 +1,15 @@
 import { FormSubmissionError } from '@use-cases/errors/form-submission-error'
 import { UserAlreadyExistsError } from '@use-cases/errors/user-already-exists-error'
-import { IFormNotificationPublisher } from 'core/contracts/infra/form-notification-publisher'
-import { FormsRepository } from 'core/contracts/repository/forms-repository'
-import { OutboxEvent } from 'core/contracts/repository/outbox-repository'
+import { IFormNotificationPublisher } from 'core/contracts/lib/infra/form-notification-publisher'
+import { FormsRepository, FormSubmissionData } from 'core/contracts/repository/forms-repository'
+import { IOutboxEvent } from 'core/contracts/repository/outbox-repository'
 import { err, ok, Result } from 'core/shared/result'
 import { FormPayload } from 'core/types/use-cases/forms/form-payload'
-
-interface FormsSubmissionUseCaseRequest {
-  name: string
-  lastName: string
-  email: string
-  decisaoPorCristo: boolean
-  location?: string
-}
 
 type Response = Result<
   {
     sanitizedFormSubmission: FormPayload
-    outboxEvent: OutboxEvent
+    outboxEvent: IOutboxEvent
   },
   Error
 >
@@ -28,7 +20,7 @@ export class FormsSubmissionUseCase {
     private notificationPublisher: IFormNotificationPublisher,
   ) {}
 
-  async execute(request: FormsSubmissionUseCaseRequest): Promise<Response> {
+  async execute(request: FormSubmissionData): Promise<Response> {
     const userAlreadyExists = await this.formsSubmissionRepository.findByEmail(request.email)
 
     if (userAlreadyExists) {
@@ -42,7 +34,7 @@ export class FormsSubmissionUseCase {
       lastName: request.lastName,
       email: request.email,
       decisaoPorCristo: request.decisaoPorCristo,
-      location: request.location || null,
+      location: request.location || undefined,
     })
 
     if (!formSubmission) {

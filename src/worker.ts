@@ -3,10 +3,10 @@ import { OutboxProcessor } from '@lib/infra/jobs/outbox-processor'
 import { logger } from '@lib/logger'
 import { DatabaseContext } from '@lib/prisma/helpers/database-context'
 import { startMailWorker } from '@lib/workers/mail-worker'
-import { OutboxSignal } from '@lib/redis/events/outbox-signal'
+import { OutboxSignal } from '@lib/infra/events/outbox-signal'
 import { PrismaOutboxRepository } from '@repositories/prisma/prisma-outbox-event-repository'
 import { Worker } from 'bullmq'
-import { OutboxEvent } from 'core/contracts/repository/outbox-repository'
+import { IOutboxEvent } from 'core/contracts/repository/outbox-repository'
 
 let worker: Worker | null = null
 let shuttingDown = false
@@ -23,7 +23,7 @@ async function bootstrap() {
 
     const outboxProcessor = new OutboxProcessor(outboxRepository)
 
-    await OutboxSignal.subscribe(async (publicId: string, event: OutboxEvent) => {
+    await OutboxSignal.subscribe(async (publicId: string, event: IOutboxEvent) => {
       await outboxProcessor.processSingleEvent(event)
     })
 
