@@ -1,6 +1,6 @@
 import Redis from 'ioredis'
 import { RateLimiterRedis } from 'rate-limiter-flexible'
-import { NoRateLimiterSetError } from '../errors/noRateLimiterSetError'
+import { NoRateLimiterSetError } from '../../errors/infra/rate-limiter/noRateLimiterSetError'
 import { logger } from '@lib/logger'
 import { REDIS_KEYS } from 'core/constants/redis/redis-keys'
 

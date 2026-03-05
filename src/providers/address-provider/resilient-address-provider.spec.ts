@@ -69,7 +69,7 @@ import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 import { NoAddressProviderError } from './error/no-address-provider-error'
 import { AddressProviderFailureError } from './error/address-provider-failure-error'
 import { AddressServiceBusyError } from '@use-cases/errors/address-service-busy-error'
-import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
+import { TimeoutExceededOnFetchError } from '@lib/errors/infra/cache/timeout-exceed-on-fetch-error'
 import { CachedFailureError } from '@lib/redis/helper/resilient-cache'
 
 // Helper: Objeto mockado estritamente tipado conforme AddressData

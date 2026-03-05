@@ -76,7 +76,7 @@ import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-foun
 import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
 import { NoGeoProviderError } from './error/no-geo-provider-error'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
-import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
+import { TimeoutExceededOnFetchError } from '@lib/errors/infra/cache/timeout-exceed-on-fetch-error'
 import { CachedFailureError } from '@lib/redis/helper/resilient-cache'
 
 // Helper: Objeto mockado estritamente tipado conforme GeoCoordinates

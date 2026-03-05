@@ -5,7 +5,7 @@ import {
   OutboxEventNotFoundInfraError,
   OutboxOperationFailedHttpError,
   OutboxOperationFailedInfraError,
-} from './outbox-erros'
+} from './outbox-errors'
 
 export const outboxErrorMapping = {
   // Contexto da API (criação do evento na mesma transação)

@@ -1,5 +1,5 @@
 import { logger } from '@lib/logger'
-import { redisCache } from '../clients/clients'
+import { redisCache } from '../../redis/clients/clients'
 import { randomUUID } from 'node:crypto'
 
 /**

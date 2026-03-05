@@ -1,4 +1,4 @@
-import { FormSubmission, Prisma } from '@prisma/client'
+import { FormSubmission } from '@prisma/client'
 
 export interface FormSubmissionData {
   name: string

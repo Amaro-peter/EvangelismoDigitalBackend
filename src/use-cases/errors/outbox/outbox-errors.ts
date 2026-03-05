@@ -1,6 +1,6 @@
-import { HTTPDomainError } from '@http/errors/http-domain-error'
-import { HTTPSystemError } from '@http/errors/http-system-error'
-import { InfrastructureError } from '@lib/errors/infra/infrastructure-error'
+import { HTTPDomainError } from 'errors/http-domain-error'
+import { HTTPSystemError } from 'errors/http-system-error'
+import { InfrastructureError } from 'errors/infrastructure-error'
 import {
   OUTBOX_EVENT_NOT_FOUND_ERROR,
   OUTBOX_OPERATION_FAILED_ERROR,
@@ -24,6 +24,7 @@ export class OutboxEventNotFoundInfraError extends InfrastructureError {
     super(OUTBOX_EVENT_NOT_FOUND_ERROR, originalError)
   }
 }
+
 export class OutboxOperationFailedInfraError extends InfrastructureError {
   constructor(originalError?: unknown) {
     super(OUTBOX_OPERATION_FAILED_ERROR, originalError)

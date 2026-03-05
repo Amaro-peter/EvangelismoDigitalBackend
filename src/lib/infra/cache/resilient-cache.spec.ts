@@ -65,9 +65,9 @@ vi.mock('ioredis', () => {
 // Imports reais
 import Redis from 'ioredis'
 import { ResilientCache, CachedFailureError } from './resilient-cache'
-import { TimeoutExceededOnFetchError } from '../errors/timeout-exceed-on-fetch-error'
-import { OperationAbortedError } from '../errors/operation-aborted-error'
-import { ServiceOverloadError } from '../errors/service-overload-error'
+import { ServiceOverloadError } from '@lib/errors/infra/cache/service-overload-error'
+import { OperationAbortedError } from '@lib/errors/infra/cache/operation-aborted-error'
+import { TimeoutExceededOnFetchError } from '@lib/errors/infra/cache/timeout-exceed-on-fetch-error'
 
 describe('ResilientCache Unit Tests', () => {
   let redisClient: Redis

@@ -6,7 +6,7 @@ import { ResilientCache, ResilientCacheOptions, CachedFailureError } from '@lib/
 import { NoGeoProviderError } from './error/no-geo-provider-error'
 import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
 import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-found-error'
-import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
+import { TimeoutExceededOnFetchError } from '@lib/errors/infra/cache/timeout-exceed-on-fetch-error'
 import {
   GeoCacheScope,
   GeocodingProvider,

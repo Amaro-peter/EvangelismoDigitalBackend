@@ -1,9 +1,9 @@
 import crypto from 'crypto'
 import { Redis } from 'ioredis'
 import { logger } from '@lib/logger'
-import { ServiceOverloadError } from '../errors/service-overload-error'
-import { TimeoutExceededOnFetchError } from '../errors/timeout-exceed-on-fetch-error'
-import { OperationAbortedError } from '../errors/operation-aborted-error'
+import { ServiceOverloadError } from '@lib/errors/infra/cache/service-overload-error'
+import { OperationAbortedError } from '@lib/errors/infra/cache/operation-aborted-error'
+import { TimeoutExceededOnFetchError } from '@lib/errors/infra/cache/timeout-exceed-on-fetch-error'
 
 export interface ResilientCacheOptions {
   prefix: string

@@ -4,10 +4,10 @@ import { Redis } from 'ioredis'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { createHttpClient } from '@lib/http/axios'
 import { logger } from '@lib/logger'
-import { EnumProviderConfig, RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
+import { EnumProviderConfig, RedisRateLimiter } from '@lib/infra/rate-limiter/rate-limiter'
 import { PrecisionHelper } from 'providers/helpers/precision-helper'
 import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
-import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
+import { TimeoutExceededOnFetchError } from '@lib/errors/infra/cache/timeout-exceed-on-fetch-error'
 import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-found-error'
 import {
   GeocodingProvider,
