@@ -8,7 +8,7 @@ import Redis from 'ioredis'
 import { AddressProviderFailureError } from './error/address-provider-failure-error'
 import { TimeoutExceededOnFetchError } from '@lib/errors/infra/cache/timeout-exceed-on-fetch-error'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
-import { AddressData, AddressProvider } from 'core/contracts/use-cases/providers/address-provider.interface'
+import { IAddressData, IAddressProvider } from 'core/contracts/use-cases/providers/address-provider.interface'
 
 export interface AwesomeApiConfig {
   apiUrl: string
@@ -30,7 +30,7 @@ interface AwesomeApiResponse {
   ddd: string
 }
 
-export class AwesomeApiProvider implements AddressProvider {
+export class AwesomeApiProvider implements IAddressProvider {
   private static api: AxiosInstance
 
   private readonly MAX_RETRIES = 2
@@ -64,7 +64,7 @@ export class AwesomeApiProvider implements AddressProvider {
     }
   }
 
-  async fetchAddress(cep: string, signal?: AbortSignal): Promise<AddressData | null> {
+  async fetchAddress(cep: string, signal?: AbortSignal): Promise<IAddressData | null> {
     const cleanCep = cep.replace(/\D/g, '')
 
     // Fail-Fast Rate Limit Check

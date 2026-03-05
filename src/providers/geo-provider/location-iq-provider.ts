@@ -9,12 +9,12 @@ import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-
 import { TimeoutExceededOnFetchError } from '@lib/errors/infra/cache/timeout-exceed-on-fetch-error'
 import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-found-error'
 import {
-  GeocodingProvider,
-  GeoCoordinates,
-  GeoSearchOptions,
+  IGeocodingProvider,
+  IGeoCoordinates,
+  IGeoSearchOptions,
 } from 'core/contracts/use-cases/providers/geo-provider.interface'
 
-export interface LocationIqConfig {
+interface LocationIqConfig {
   apiUrl: string
   apiToken: string
 }
@@ -27,7 +27,7 @@ type LocationIqResponseItem = {
   place_rank?: number
 }
 
-export class LocationIqProvider implements GeocodingProvider {
+export class LocationIqProvider implements IGeocodingProvider {
   private static api: AxiosInstance
 
   // Configuração Fail-Fast in RedisRateLimiter: 2 requisições por segundo
@@ -67,11 +67,11 @@ export class LocationIqProvider implements GeocodingProvider {
     }
   }
 
-  async search(query: string, signal?: AbortSignal): Promise<GeoCoordinates | null> {
+  async search(query: string, signal?: AbortSignal): Promise<IGeoCoordinates | null> {
     return this.performRequest({ q: query, limit: 1, addressdetails: 1 }, signal)
   }
 
-  async searchStructured(options: GeoSearchOptions, signal?: AbortSignal): Promise<GeoCoordinates | null> {
+  async searchStructured(options: IGeoSearchOptions, signal?: AbortSignal): Promise<IGeoCoordinates | null> {
     return this.performRequest(
       {
         street: options.street,
@@ -85,7 +85,7 @@ export class LocationIqProvider implements GeocodingProvider {
     )
   }
 
-  private async performRequest(params: Record<string, unknown>, signal?: AbortSignal): Promise<GeoCoordinates | null> {
+  private async performRequest(params: Record<string, unknown>, signal?: AbortSignal): Promise<IGeoCoordinates | null> {
     let lastError: Error | unknown = undefined
 
     for (let attempt = 1; attempt <= this.MAX_ATTEMPTS; attempt++) {

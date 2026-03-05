@@ -1,6 +1,5 @@
 import { AxiosError, AxiosInstance } from 'axios'
 import Redis from 'ioredis'
-import { AddressData, AddressProvider } from '../../core/contracts/providers/address-provider.interface'
 import { logger } from '@lib/logger'
 import { createHttpClient } from '@lib/http/axios'
 import { EnumProviderConfig, RedisRateLimiter } from '@lib/infra/rate-limiter/rate-limiter'
@@ -9,6 +8,7 @@ import { PrecisionHelper } from 'providers/helpers/precision-helper'
 import { AddressProviderFailureError } from './error/address-provider-failure-error'
 import { TimeoutExceededOnFetchError } from '@lib/errors/infra/cache/timeout-exceed-on-fetch-error'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
+import { IAddressData, IAddressProvider } from 'core/contracts/use-cases/providers/address-provider.interface'
 
 export interface BrasilApiConfig {
   apiUrl: string // Esperado: https://brasilapi.com.br
@@ -25,7 +25,7 @@ interface BrasilApiResponse {
   service: string
 }
 
-export class BrasilApiProvider implements AddressProvider {
+export class BrasilApiProvider implements IAddressProvider {
   private static api: AxiosInstance
 
   // Configuração de Retry e Timeout
@@ -60,7 +60,7 @@ export class BrasilApiProvider implements AddressProvider {
     }
   }
 
-  async fetchAddress(cep: string, signal?: AbortSignal): Promise<AddressData | null> {
+  async fetchAddress(cep: string, signal?: AbortSignal): Promise<IAddressData | null> {
     const cleanCep = cep.replace(/\D/g, '')
 
     // 1. Fail-Fast Rate Limit Check

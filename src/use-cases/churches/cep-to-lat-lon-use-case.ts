@@ -2,7 +2,6 @@ import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-foun
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 import { Redis } from 'ioredis'
 import { logger } from '@lib/logger'
-import { ResilientCache, ResilientCacheOptions, CachedFailureError } from '@lib/redis/helper/resilient-cache'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { CepToLatLonError } from '@use-cases/errors/cep-to-lat-lon-error'
 import { ServiceOverloadError } from '@lib/errors/infra/cache/service-overload-error'
@@ -11,11 +10,12 @@ import { TimeoutExceededOnFetchError } from '@lib/errors/infra/cache/timeout-exc
 import { AddressProviderFailureError } from 'providers/address-provider/error/address-provider-failure-error'
 import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
 import {
-  GeocodingProvider,
-  GeoCoordinates,
-  GeoPrecision,
+  IGeocodingProvider,
+  IGeoCoordinates,
+  EnumGeoPrecision,
 } from 'core/contracts/use-cases/providers/geo-provider.interface'
-import { AddressData, AddressProvider } from 'core/contracts/use-cases/providers/address-provider.interface'
+import { IAddressData, IAddressProvider } from 'core/contracts/use-cases/providers/address-provider.interface'
+import { CachedFailureError, ResilientCache, ResilientCacheOptions } from '@lib/infra/cache/resilient-cache'
 
 interface CepToLatLonRequest {
   cep: string
@@ -32,8 +32,8 @@ export class CepToLatLonUseCase {
   private readonly cacheManager: ResilientCache
 
   constructor(
-    private geocodingProvider: GeocodingProvider,
-    private addressProvider: AddressProvider,
+    private geocodingProvider: IGeocodingProvider,
+    private addressProvider: IAddressProvider,
     redis: Redis,
     optionsOverride: ResilientCacheOptions,
   ) {
@@ -145,7 +145,7 @@ export class CepToLatLonUseCase {
     // 1. Fetch Address (ViaCEP / AwesomeAPI)
     // Passing signal to ensure we respect the global/cache timeout
 
-    let address: AddressData
+    let address: IAddressData
 
     try {
       const data = await this.addressProvider.fetchAddress(cleanCep, signal)
@@ -159,7 +159,7 @@ export class CepToLatLonUseCase {
         return {
           userLat: data.lat,
           userLon: data.lon,
-          precision: data.precision || GeoPrecision.NO_CERTAINTY,
+          precision: data.precision || EnumGeoPrecision.NO_CERTAINTY,
           providerName: data.providerName,
         }
       }
@@ -227,7 +227,7 @@ export class CepToLatLonUseCase {
     throw new CepToLatLonError()
   }
 
-  private mapResponse(coords: GeoCoordinates): CepToLatLonResponse {
+  private mapResponse(coords: IGeoCoordinates): CepToLatLonResponse {
     return {
       userLat: coords.lat,
       userLon: coords.lon,

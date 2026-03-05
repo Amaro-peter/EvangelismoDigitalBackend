@@ -1,18 +1,18 @@
-export enum GeoPrecision {
+export enum EnumGeoPrecision {
   ROOFTOP = 'ROOFTOP',
   NEIGHBORHOOD = 'NEIGHBORHOOD',
   CITY = 'CITY',
   NO_CERTAINTY = 'NO_CERTAINTY',
 }
 
-export interface GeoCoordinates {
+export interface IGeoCoordinates {
   lat: number
   lon: number
-  precision: GeoPrecision
+  precision: EnumGeoPrecision
   providerName?: string
 }
 
-export interface GeoSearchOptions {
+export interface IGeoSearchOptions {
   street?: string
   neighborhood?: string
   city: string
@@ -20,12 +20,12 @@ export interface GeoSearchOptions {
   country: string
 }
 
-export enum GeoCacheScope {
+export enum EnumGeoCacheScope {
   SEARCH = 'search',
   SEARCH_STRUCTURED = 'searchStructured',
 }
 
-export interface GeocodingProvider {
-  search(query: string, signal?: AbortSignal): Promise<GeoCoordinates | null>
-  searchStructured(options: GeoSearchOptions, signal?: AbortSignal): Promise<GeoCoordinates | null>
+export interface IGeocodingProvider {
+  search(query: string, signal?: AbortSignal): Promise<IGeoCoordinates | null>
+  searchStructured(options: IGeoSearchOptions, signal?: AbortSignal): Promise<IGeoCoordinates | null>
 }

@@ -1,22 +1,22 @@
 import { Redis } from 'ioredis'
-import { AddressData, AddressProvider } from '../../core/contracts/providers/address-provider.interface'
 import { logger } from '@lib/logger'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
-import { ResilientCache, ResilientCacheOptions, CachedFailureError } from '@lib/redis/helper/resilient-cache'
 import { NoAddressProviderError } from './error/no-address-provider-error'
 import { AddressProviderFailureError } from './error/address-provider-failure-error'
 import { AddressServiceBusyError } from '@use-cases/errors/address-service-busy-error'
 import { TimeoutExceededOnFetchError } from '@lib/errors/infra/cache/timeout-exceed-on-fetch-error'
+import { CachedFailureError, ResilientCache, ResilientCacheOptions } from '@lib/infra/cache/resilient-cache'
+import { IAddressData, IAddressProvider } from 'core/contracts/use-cases/providers/address-provider.interface'
 
 enum AddressCacheScope {
   CEP = 'cep',
 }
 
-export class ResilientAddressProvider implements AddressProvider {
+export class ResilientAddressProvider implements IAddressProvider {
   private readonly cacheManager: ResilientCache
 
   constructor(
-    private readonly providers: AddressProvider[],
+    private readonly providers: IAddressProvider[],
     redis: Redis,
     optionsOverride: ResilientCacheOptions,
   ) {
@@ -34,7 +34,7 @@ export class ResilientAddressProvider implements AddressProvider {
     })
   }
 
-  async fetchAddress(cep: string, signal?: AbortSignal): Promise<AddressData | null> {
+  async fetchAddress(cep: string, signal?: AbortSignal): Promise<IAddressData | null> {
     const cleanCep = cep.replace(/\D/g, '')
 
     const cacheKey = this.cacheManager.generateKey({
@@ -43,7 +43,7 @@ export class ResilientAddressProvider implements AddressProvider {
     })
 
     try {
-      return await this.cacheManager.getOrFetch<AddressData>(
+      return await this.cacheManager.getOrFetch<IAddressData>(
         cacheKey,
         async (effectiveSignal) => {
           return await this.executeStrategy(cleanCep, effectiveSignal)
@@ -81,7 +81,7 @@ export class ResilientAddressProvider implements AddressProvider {
     }
   }
 
-  private async executeStrategy(cep: string, signal: AbortSignal): Promise<AddressData> {
+  private async executeStrategy(cep: string, signal: AbortSignal): Promise<IAddressData> {
     let lastError: Error | unknown = undefined
     let hasSystemError = false
     let lastProviderName = ''

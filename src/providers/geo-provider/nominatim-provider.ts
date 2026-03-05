@@ -10,18 +10,18 @@ import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-
 import { TimeoutExceededOnFetchError } from '@lib/errors/infra/cache/timeout-exceed-on-fetch-error'
 import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-found-error'
 import {
-  GeocodingProvider,
-  GeoCoordinates,
-  GeoSearchOptions,
+  IGeocodingProvider,
+  IGeoCoordinates,
+  IGeoSearchOptions,
 } from 'core/contracts/use-cases/providers/geo-provider.interface'
 
-export interface NominatimConfig {
+interface NominatimConfig {
   apiUrl: string
 }
 
 type NominatimSearchParams = Record<string, string | number | undefined>
 
-export class NominatimGeoProvider implements GeocodingProvider {
+export class NominatimGeoProvider implements IGeocodingProvider {
   private static api: AxiosInstance
 
   // Nominatim API Timeout
@@ -54,11 +54,11 @@ export class NominatimGeoProvider implements GeocodingProvider {
     }
   }
 
-  async search(query: string, signal?: AbortSignal): Promise<GeoCoordinates | null> {
+  async search(query: string, signal?: AbortSignal): Promise<IGeoCoordinates | null> {
     return this.performRequest({ q: query, limit: 1, format: 'json' }, signal)
   }
 
-  async searchStructured(options: GeoSearchOptions, signal?: AbortSignal): Promise<GeoCoordinates | null> {
+  async searchStructured(options: IGeoSearchOptions, signal?: AbortSignal): Promise<IGeoCoordinates | null> {
     return this.performRequest(
       {
         street: options.street,
@@ -72,7 +72,7 @@ export class NominatimGeoProvider implements GeocodingProvider {
     )
   }
 
-  private async performRequest(params: NominatimSearchParams, signal?: AbortSignal): Promise<GeoCoordinates | null> {
+  private async performRequest(params: NominatimSearchParams, signal?: AbortSignal): Promise<IGeoCoordinates | null> {
     try {
       if (signal?.aborted) {
         throw signal.reason

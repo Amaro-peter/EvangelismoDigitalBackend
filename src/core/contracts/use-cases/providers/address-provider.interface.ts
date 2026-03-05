@@ -1,16 +1,16 @@
-import { GeoPrecision } from './geo-provider.interface'
+import { EnumGeoPrecision } from './geo-provider.interface'
 
-export interface AddressData {
+export interface IAddressData {
   logradouro?: string
   bairro?: string
   localidade: string
   uf: string
   lat?: number
   lon?: number
-  precision?: GeoPrecision
+  precision?: EnumGeoPrecision
   providerName?: string
 }
 
-export interface AddressProvider {
-  fetchAddress(cep: string, signal?: AbortSignal): Promise<AddressData | null>
+export interface IAddressProvider {
+  fetchAddress(cep: string, signal?: AbortSignal): Promise<IAddressData | null>
 }
