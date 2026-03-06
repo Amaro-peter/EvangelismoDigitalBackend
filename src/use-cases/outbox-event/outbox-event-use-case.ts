@@ -1,12 +1,12 @@
-import { IFormNotificationPublisher } from 'core/contracts/lib/infra/form-notification-publisher.interface'
+import { IOutboxEventRegistration } from 'core/contracts/use-cases/outbox-event/outbox-event.interface'
 import { IOutboxRepository, IOutboxEvent, IOutboxEventType } from 'core/contracts/repository/outbox-repository'
 import { Result } from 'core/shared/result'
 import { FormPayload } from 'core/types/use-cases/forms/form-payload'
 
-export class OutboxFormNotificationPublisher implements IFormNotificationPublisher {
+export class OutboxEventUseCase implements IOutboxEventRegistration {
   constructor(private outboxRepository: IOutboxRepository) {}
 
-  async publishToOutbox(form: FormPayload): Promise<Result<IOutboxEvent, Error>> {
+  async register(form: FormPayload): Promise<Result<IOutboxEvent, Error>> {
     const payload = {
       name: form.name,
       email: form.email,

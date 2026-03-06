@@ -1,4 +1,4 @@
-import { OutboxFormNotificationPublisher } from '@lib/infra/outbox-publisher/outbox-notification-publisher'
+import { OutboxEventUseCase } from '@use-cases/outbox-event/outbox-event-use-case'
 import { DatabaseContext } from '@lib/prisma/helpers/database-context'
 import { PrismaFormsRepository } from '@repositories/prisma/prisma-forms-repository'
 import { PrismaOutboxRepository } from '@repositories/prisma/prisma-outbox-event-repository'
@@ -15,7 +15,7 @@ export function makeFormSubmissionUseCase() {
   const outboxRepository = new PrismaOutboxRepository(dbContext)
 
   // 3. Infraestrutura (Publisher usa o repositório de outbox)
-  const notificationPublisher = new OutboxFormNotificationPublisher(outboxRepository)
+  const notificationPublisher = new OutboxEventUseCase(outboxRepository)
 
   // 4. Use Case Puro (Regra de Negócio)
   const useCase = new FormsSubmissionUseCase(formsRepository, notificationPublisher)

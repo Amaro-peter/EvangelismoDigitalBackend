@@ -12,6 +12,7 @@ export class OutboxEventNotFoundHttpError extends HTTPDomainError {
     super(OUTBOX_EVENT_NOT_FOUND_ERROR, 404)
   }
 }
+
 export class OutboxOperationFailedHttpError extends HTTPSystemError {
   constructor() {
     super(OUTBOX_OPERATION_FAILED_ERROR, 500)
