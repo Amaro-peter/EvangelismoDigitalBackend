@@ -15,7 +15,7 @@ type Response = Result<
 export class FormsSubmissionUseCase {
   constructor(
     private formsSubmissionRepository: FormsRepository,
-    private notificationPublisher: IOutboxEventRegistration,
+    private eventRegistration: IOutboxEventRegistration,
   ) {}
 
   async execute(request: IFormSubmissionInputData): Promise<Response> {
@@ -53,7 +53,7 @@ export class FormsSubmissionUseCase {
 
     // 3. Side-Effect Seguro (Outbox Pattern)
     // Salva o evento na tabela 'outbox_events' NA MESMA TRANSAÇÃO do formulário
-    const outboxEvent = await this.notificationPublisher.register(sanitizedFormSubmission)
+    const outboxEvent = await this.eventRegistration.register(sanitizedFormSubmission)
 
     if (outboxEvent.success === false) {
       return outboxEvent
