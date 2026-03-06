@@ -6,11 +6,11 @@ import { contactStaffSubjectTextTemplate } from '@templates/contact-staff/contac
 import { contactStaffTextTemplate } from '@templates/contact-staff/contact-staff-text'
 import { contactStaffHtmlTemplate } from '@templates/contact-staff/contact-staff-html'
 import { FormPayload } from 'core/types/use-cases/forms/form-payload'
-import { MailJobData } from 'core/contracts/lib/queue/mail-job-data'
+import { IMailJobData } from 'core/contracts/lib/queue/mail-job-data.interface'
 import { env } from '@env/index'
 
 export class ContactEmailStrategy implements IFormEmailStrategy {
-  buildUserEmail(form: FormPayload): MailJobData {
+  buildUserEmail(form: FormPayload): IMailJobData {
     const email = this.getStringField(form.email, 'form.email')
     const name = this.getStringField(form.name, 'form.name')
 
@@ -23,7 +23,7 @@ export class ContactEmailStrategy implements IFormEmailStrategy {
     }
   }
 
-  buildStaffEmail(form: FormPayload): MailJobData {
+  buildStaffEmail(form: FormPayload): IMailJobData {
     const email = this.getStringField(form.email, 'form.email')
     const name = this.getStringField(form.name, 'form.name')
     const lastName = this.getOptionalStringField(form.lastName, 'form.lastName')

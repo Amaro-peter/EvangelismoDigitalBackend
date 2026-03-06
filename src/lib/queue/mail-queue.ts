@@ -3,11 +3,11 @@ import { logger } from '@lib/logger'
 import { redisForQueue } from '@lib/redis/clients/clients'
 import { attachRedisLogger } from '@lib/redis/connections/redis-bullMQ-connection'
 import { Queue } from 'bullmq'
-import { OutboxDispatchData } from 'core/contracts/lib/infra/outbox-dispatch-data'
+import { IOutboxDispatchData } from 'core/contracts/lib/infra/outbox-dispatch-data.interface'
 
 attachRedisLogger(redisForQueue, QUEUE_NAMES.MAIL)
 
-export const mailQueue = new Queue<OutboxDispatchData>(QUEUE_NAMES.MAIL, {
+export const mailQueue = new Queue<IOutboxDispatchData>(QUEUE_NAMES.MAIL, {
   connection: redisForQueue,
   defaultJobOptions: {
     attempts: 3,

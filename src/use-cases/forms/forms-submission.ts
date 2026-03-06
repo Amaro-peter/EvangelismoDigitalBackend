@@ -1,6 +1,6 @@
 import { FormSubmissionError } from '@use-cases/errors/form-submission-error'
 import { UserAlreadyExistsError } from '@use-cases/errors/user-already-exists-error'
-import { IFormNotificationPublisher } from 'core/contracts/lib/infra/form-notification-publisher'
+import { IFormNotificationPublisher } from 'core/contracts/lib/infra/form-notification-publisher.interface'
 import { FormsRepository, FormSubmissionData } from 'core/contracts/repository/forms-repository'
 import { IOutboxEvent } from 'core/contracts/repository/outbox-repository'
 import { err, ok, Result } from 'core/shared/result'

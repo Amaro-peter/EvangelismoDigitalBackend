@@ -1,4 +1,4 @@
-export interface MailJobData {
+export interface IMailJobData {
   to: string
   subject: string
   message: string

@@ -1,4 +1,4 @@
-import { IFormNotificationPublisher } from 'core/contracts/lib/infra/form-notification-publisher'
+import { IFormNotificationPublisher } from 'core/contracts/lib/infra/form-notification-publisher.interface'
 import { IOutboxRepository, IOutboxEvent, IOutboxEventType } from 'core/contracts/repository/outbox-repository'
 import { Result } from 'core/shared/result'
 import { FormPayload } from 'core/types/use-cases/forms/form-payload'

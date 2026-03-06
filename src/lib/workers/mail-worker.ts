@@ -7,7 +7,7 @@ import { IOutboxRepository } from 'core/contracts/repository/outbox-repository'
 import { JobAlreadyProcessingError } from '@lib/errors/queue/job-already-processing-error'
 import { SmtpDispatchError } from '@lib/errors/queue/smtp-dispatch-error'
 import { InfrastructureError } from 'errors/infrastructure-error'
-import { OutboxDispatchData } from 'core/contracts/lib/infra/outbox-dispatch-data'
+import { IOutboxDispatchData } from 'core/contracts/lib/infra/outbox-dispatch-data.interface'
 import { QUEUE_NAMES } from 'core/constants/queue/queue'
 import { REDIS_KEYS } from 'core/constants/redis/redis-keys'
 import { IDEMPOTENCY_TTL, MAIL_WORKER_CONFIG } from 'core/constants/workers/workers'
@@ -16,7 +16,7 @@ export async function startMailWorker(outboxRepository: IOutboxRepository) {
   const workerConnection = createWorkerConnection()
   attachRedisLogger(workerConnection, 'MailWorker')
 
-  const worker = new Worker<OutboxDispatchData>(
+  const worker = new Worker<IOutboxDispatchData>(
     QUEUE_NAMES.MAIL,
     async (job) => {
       const { publicId, emails } = job.data

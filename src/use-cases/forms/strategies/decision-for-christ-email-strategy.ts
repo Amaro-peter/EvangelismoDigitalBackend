@@ -6,11 +6,11 @@ import { decisionForChristStaffSubjectText } from '@templates/decision-for-chris
 import { decisionForChristStaffTextTemplate } from '@templates/decision-for-christ-staff/decision-for-christ-staff-text'
 import { decisionForChristStaffHtmlTemplate } from '@templates/decision-for-christ-staff/decision-for-christ-staff-html'
 import { FormPayload } from 'core/types/use-cases/forms/form-payload'
-import { MailJobData } from 'core/contracts/lib/queue/mail-job-data'
+import { IMailJobData } from 'core/contracts/lib/queue/mail-job-data.interface'
 import { env } from '@env/index'
 
 export class DecisionForChristEmailStrategy implements IFormEmailStrategy {
-  buildUserEmail(form: FormPayload): MailJobData {
+  buildUserEmail(form: FormPayload): IMailJobData {
     const email = this.getStringField(form.email, 'form.email')
     const name = this.getStringField(form.name, 'form.name')
 
@@ -23,7 +23,7 @@ export class DecisionForChristEmailStrategy implements IFormEmailStrategy {
     }
   }
 
-  buildStaffEmail(form: FormPayload): MailJobData {
+  buildStaffEmail(form: FormPayload): IMailJobData {
     const email = this.getStringField(form.email, 'form.email')
     const name = this.getStringField(form.name, 'form.name')
     const lastName = this.getStringField(form.lastName, 'form.lastName')

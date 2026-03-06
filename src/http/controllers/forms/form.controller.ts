@@ -22,7 +22,6 @@ export async function formSubmission(request: FastifyRequest, reply: FastifyRepl
   if (result.success === false) {
     const error = result.error
 
-    // Loga o erro de negócio (opcional, pois não é erro de sistema)
     logger.warn({ email: data.email, error: error.message }, 'Tentativa de submissão de formulário falhou')
 
     if (error instanceof FormSubmissionError || error instanceof UserAlreadyExistsError) {
