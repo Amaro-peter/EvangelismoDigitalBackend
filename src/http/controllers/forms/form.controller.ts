@@ -3,7 +3,7 @@ import { formsSchema } from '@http/schemas/forms/forms-schema'
 import { makeFormSubmissionUseCase } from '@use-cases/forms/factories/make-form-submission-use-case'
 import { logger } from '@lib/logger'
 import { OutboxSignal } from '@lib/infra/events/outbox-signal'
-import { HttpErrorMapper } from '@http/errors/http-error-mapper'
+import { HttpErrorMapper } from 'errors/http-errors/http-error-mapper'
 
 export async function formSubmission(request: FastifyRequest, reply: FastifyReply) {
   // 1. Validação de Entrada (Zod)

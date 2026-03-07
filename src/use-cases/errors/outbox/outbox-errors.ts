@@ -1,6 +1,6 @@
-import { HTTPDomainError } from 'errors/http-domain-error'
-import { HTTPSystemError } from 'errors/http-system-error'
-import { InfrastructureError } from 'errors/infrastructure-error'
+import { HTTPDomainError } from 'errors/http-errors/http-domain-error'
+import { HTTPSystemError } from 'errors/http-errors/http-system-error'
+import { InfrastructureError } from 'errors/infra-errors/infrastructure-error'
 import {
   OUTBOX_EVENT_NOT_FOUND_ERROR,
   OUTBOX_OPERATION_FAILED_ERROR,

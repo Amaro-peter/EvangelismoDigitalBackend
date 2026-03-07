@@ -1,4 +1,4 @@
-import { InfrastructureError } from 'errors/infrastructure-error'
+import { InfrastructureError } from 'errors/infra-errors/infrastructure-error'
 import { Prisma } from '@prisma/client'
 import { IErrorMapper } from 'core/contracts/errors/error-mapper.interface'
 

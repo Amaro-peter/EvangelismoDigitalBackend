@@ -1,4 +1,4 @@
-import { HTTPDomainError } from 'errors/http-domain-error'
+import { HTTPDomainError } from 'errors/http-errors/http-domain-error'
 import { Prisma } from '@prisma/client'
 import { IErrorMapper } from 'core/contracts/errors/error-mapper.interface'
 

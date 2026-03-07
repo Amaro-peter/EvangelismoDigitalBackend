@@ -1,6 +1,6 @@
 import { FastifyReply } from 'fastify'
-import { HTTPDomainError } from '../../errors/http-domain-error'
-import { HTTPSystemError } from 'errors/http-system-error'
+import { HTTPDomainError } from './http-domain-error'
+import { HTTPSystemError } from 'errors/http-errors/http-system-error'
 
 export class HttpErrorMapper {
   static map(error: Error, reply: FastifyReply) {
