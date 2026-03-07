@@ -2,7 +2,7 @@ import { InMemoryUsersRepository } from '@repositories/in-memory/in-memory-users
 import { describe, it, expect } from 'vitest'
 import { RegisterUserUseCase } from './register-user'
 import { compare } from 'bcryptjs'
-import { UserRole } from 'core/contracts/repository/users-repository'
+import { UserRole } from 'core/contracts/repository/users-repository.interface'
 import { AuthenticateUserUseCase } from './authenticate-user'
 import { InvalidCredentialsError } from '@use-cases/errors/invalid-credentials-error'
 import { cpf as cpfValidator } from 'cpf-cnpj-validator'

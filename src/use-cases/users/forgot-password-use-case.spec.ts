@@ -1,7 +1,7 @@
 import { InMemoryUsersRepository } from '@repositories/in-memory/in-memory-users-repository'
 import { describe, it, expect, vi } from 'vitest'
 import { RegisterUserUseCase } from './register-user'
-import { UserRole } from 'core/contracts/repository/users-repository'
+import { UserRole } from 'core/contracts/repository/users-repository.interface'
 import { cpf as cpfValidator } from 'cpf-cnpj-validator'
 import { ForgotPasswordUseCase } from './forgot-password'
 import { UserNotFoundForPasswordResetError } from '@use-cases/errors/user-not-found-for-password-reset-error'

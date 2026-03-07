@@ -1,7 +1,7 @@
 import { REDIS_CHANNELS } from 'core/constants/redis/redis-channells'
 import { env } from '@env/index'
 import { logger } from '@lib/logger'
-import { IOutboxEvent } from 'core/contracts/repository/outbox-repository'
+import { IOutboxEvent } from 'core/contracts/repository/outbox-repository.interface'
 import Redis from 'ioredis'
 
 const baseConfig = {

@@ -3,7 +3,7 @@ import { makeSendEmailUseCase } from '@use-cases/factories/make-send-email-use-c
 import { attachRedisLogger } from '@lib/redis/connections/redis-bullMQ-connection'
 import { logger } from '@lib/logger'
 import { createWorkerConnection, redisCache } from '@lib/redis/clients/clients'
-import { IOutboxRepository } from 'core/contracts/repository/outbox-repository'
+import { IOutboxRepository } from 'core/contracts/repository/outbox-repository.interface'
 import { JobAlreadyProcessingError } from '@lib/errors/queue/job-already-processing-error'
 import { SmtpDispatchError } from '@lib/errors/queue/smtp-dispatch-error'
 import { InfrastructureError } from 'errors/infra-errors/infrastructure-error'

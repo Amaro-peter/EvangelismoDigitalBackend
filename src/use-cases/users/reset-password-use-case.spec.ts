@@ -2,7 +2,7 @@ import { InMemoryUsersRepository } from '@repositories/in-memory/in-memory-users
 import { describe, it, expect, vi } from 'vitest'
 import { RegisterUserUseCase } from './register-user'
 import { compare } from 'bcryptjs'
-import { UserRole } from 'core/contracts/repository/users-repository'
+import { UserRole } from 'core/contracts/repository/users-repository.interface'
 import { cpf as cpfValidator } from 'cpf-cnpj-validator'
 import { ForgotPasswordUseCase } from './forgot-password'
 import { ResetPasswordUseCase } from './reset-password'

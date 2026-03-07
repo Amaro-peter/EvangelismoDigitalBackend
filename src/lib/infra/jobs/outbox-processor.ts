@@ -5,7 +5,11 @@ import { mailQueue } from '@lib/queue/mail-queue'
 import { DistributedLock, LockToken } from '@lib/infra/distributed-lock/distributed-lock'
 import { ContactEmailStrategy } from '@use-cases/forms/strategies/contact-email-strategy'
 import { DecisionForChristEmailStrategy } from '@use-cases/forms/strategies/decision-for-christ-email-strategy'
-import { IOutboxRepository, IOutboxEvent, IOutboxEventType } from 'core/contracts/repository/outbox-repository'
+import {
+  IOutboxRepository,
+  IOutboxEvent,
+  IOutboxEventType,
+} from 'core/contracts/repository/outbox-repository.interface'
 import { FormPayload } from 'core/types/use-cases/forms/form-payload'
 import { OUTBOX_THRESHOLDS } from 'core/constants/outbox/outbox-thresholds'
 

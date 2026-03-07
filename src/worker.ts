@@ -6,7 +6,7 @@ import { startMailWorker } from '@lib/workers/mail-worker'
 import { OutboxSignal } from '@lib/infra/events/outbox-signal'
 import { PrismaOutboxRepository } from '@repositories/prisma/prisma-outbox-event-repository'
 import { Worker } from 'bullmq'
-import { IOutboxEvent } from 'core/contracts/repository/outbox-repository'
+import { IOutboxEvent } from 'core/contracts/repository/outbox-repository.interface'
 
 let worker: Worker | null = null
 let shuttingDown = false

@@ -5,7 +5,7 @@ import {
   FindNearbyParams,
   Church,
   ChurchAlreadyExists,
-} from '../../core/contracts/repository/churches-repository'
+} from '../../core/contracts/repository/churches-repository.interface'
 import { Prisma } from '@prisma/client'
 import { ChurchAlreadyExistsError } from '@use-cases/errors/church-already-exists-error'
 

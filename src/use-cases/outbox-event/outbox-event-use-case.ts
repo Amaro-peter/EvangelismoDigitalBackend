@@ -1,5 +1,9 @@
 import { IOutboxEventRegistration } from 'core/contracts/use-cases/outbox-event/outbox-event.interface'
-import { IOutboxRepository, IOutboxEvent, IOutboxEventType } from 'core/contracts/repository/outbox-repository'
+import {
+  IOutboxRepository,
+  IOutboxEvent,
+  IOutboxEventType,
+} from 'core/contracts/repository/outbox-repository.interface'
 import { Result } from 'core/shared/result'
 import { FormPayload } from 'core/types/use-cases/forms/form-payload'
 

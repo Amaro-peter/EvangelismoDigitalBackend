@@ -8,7 +8,7 @@ import {
   IOutboxEvent,
   IOutBoxEventInputData,
   IOutboxEventType,
-} from 'core/contracts/repository/outbox-repository'
+} from 'core/contracts/repository/outbox-repository.interface'
 import { PrismaHTTPErrorMapper } from '@lib/prisma/utils/prisma-http-error-mapper'
 
 export class PrismaOutboxRepository implements IOutboxRepository {

@@ -1,6 +1,6 @@
 import { IOutboxEventRegistration } from 'core/contracts/use-cases/outbox-event/outbox-event.interface'
-import { FormsRepository, IFormSubmissionInputData } from 'core/contracts/repository/forms-repository'
-import { IOutboxEvent } from 'core/contracts/repository/outbox-repository'
+import { FormsRepository, IFormSubmissionInputData } from 'core/contracts/repository/forms-repository.interface'
+import { IOutboxEvent } from 'core/contracts/repository/outbox-repository.interface'
 import { ok, Result } from 'core/shared/result'
 import { FormPayload } from 'core/types/use-cases/forms/form-payload'
 

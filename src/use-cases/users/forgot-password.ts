@@ -2,7 +2,7 @@ import { User } from '@prisma/client'
 import { randomBytes } from 'crypto'
 import { UserNotFoundForPasswordResetError } from '../errors/user-not-found-for-password-reset-error'
 import { emailSchema } from '@http/schemas/utils/email'
-import { UsersRepository } from 'core/contracts/repository/users-repository'
+import { UsersRepository } from 'core/contracts/repository/users-repository.interface'
 
 interface ForgotPasswordUseCaseRequest {
   email: string

@@ -1,5 +1,5 @@
 import { User } from '@prisma/client'
-import { UsersRepository, UserUpdateInput } from 'core/contracts/repository/users-repository'
+import { UsersRepository, UserUpdateInput } from 'core/contracts/repository/users-repository.interface'
 import { ResourceNotFoundError } from '@use-cases/errors/resource-not-found-error'
 import { UserAlreadyExistsError } from '@use-cases/errors/user-already-exists-error'
 

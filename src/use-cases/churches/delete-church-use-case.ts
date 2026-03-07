@@ -1,4 +1,4 @@
-import { Church, ChurchesRepository } from 'core/contracts/repository/churches-repository'
+import { Church, ChurchesRepository } from 'core/contracts/repository/churches-repository.interface'
 import { ChurchNotFoundError } from '@use-cases/errors/church-not-found-error'
 
 interface DeleteChurchUseCaseRequest {
