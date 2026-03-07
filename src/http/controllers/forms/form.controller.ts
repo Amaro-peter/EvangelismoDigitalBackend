@@ -1,10 +1,9 @@
 import { FastifyReply, FastifyRequest } from 'fastify'
 import { formsSchema } from '@http/schemas/forms/forms-schema'
 import { makeFormSubmissionUseCase } from '@use-cases/forms/factories/make-form-submission-use-case'
-import { FormSubmissionError } from '@use-cases/errors/form-submission-error'
 import { logger } from '@lib/logger'
-import { UserAlreadyExistsError } from '@use-cases/errors/user-already-exists-error'
 import { OutboxSignal } from '@lib/infra/events/outbox-signal'
+import { HttpErrorMapper } from '@http/errors/http-error-mapper'
 
 export async function formSubmission(request: FastifyRequest, reply: FastifyReply) {
   // 1. Validação de Entrada (Zod)
@@ -18,17 +17,9 @@ export async function formSubmission(request: FastifyRequest, reply: FastifyRepl
     ...data,
   })
 
-  // 4. Tratamento do Result (Pattern Matching manual)
+  // 4. Tratamento de erro (HTTP Errors)
   if (result.success === false) {
-    const error = result.error
-
-    logger.warn({ email: data.email, error: error.message }, 'Tentativa de submissão de formulário falhou')
-
-    if (error instanceof FormSubmissionError || error instanceof UserAlreadyExistsError) {
-      return reply.status(409).send({ message: error.message })
-    }
-
-    throw error
+    return HttpErrorMapper.map(result.error, reply)
   }
 
   // 5. Sucesso
@@ -37,7 +28,7 @@ export async function formSubmission(request: FastifyRequest, reply: FastifyRepl
   OutboxSignal.publishNewItem(outboxEvent.publicId, outboxEvent).catch(() => {
     logger.error(
       { publicId: outboxEvent.publicId },
-      'Prosseguindo com a resposta, mas falha ao publicar o evento na fila',
+      'Prosseguindo com a resposta, mas falha acorreu ao publicar o evento na fila',
     )
   })
 
