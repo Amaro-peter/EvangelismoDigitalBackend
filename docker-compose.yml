@@ -8,7 +8,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USERNAME} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -20,7 +20,7 @@ services:
     container_name: redis_evangelismo_dev
     ports:
       - "6379:6379"
-    command: redis-server --requirepass ${REDIS_PASSWORD}
+    command: redis-server --requirepass ${REDIS_PASSWORD} --save "" --appendonly no
     volumes:
       - redis_data:/data
     healthcheck:
@@ -150,15 +150,15 @@ services:
         npm run start:worker
     networks:
       - evangelismo-network
-  valhalla:
-    image: ghcr.io/gis-ops/docker-valhalla/valhalla:latest
-    container_name: valhalla_server_compose
-    ports:
-      - "8002:8002"
-    volumes:
-      - /home/amaro/valhalla_docker/custom_files:/custom_files
-    networks:
-      - evangelismo-network
+  #valhalla:
+  #  image: ghcr.io/gis-ops/docker-valhalla/valhalla:latest
+  #  container_name: valhalla_server_compose
+  #  ports:
+  #    - "8002:8002"
+  #  volumes:
+  #    - /home/amaro/valhalla_docker/custom_files:/custom_files
+  #  networks:
+  #    - evangelismo-network
 
 volumes:
   pgdata:

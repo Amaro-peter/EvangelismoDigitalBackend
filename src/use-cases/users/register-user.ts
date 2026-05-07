@@ -2,7 +2,7 @@ import { UserAlreadyExistsError } from '@use-cases/errors/user-already-exists-er
 import { Prisma, User } from '@prisma/client'
 import { hash } from 'bcryptjs'
 import { env } from '@env/index'
-import { UserRole, UsersRepository } from '@repositories/users-repository'
+import { UserRole, UsersRepository } from 'core/contracts/repository/users-repository.interface'
 import { UserNotCreatedError } from '@use-cases/errors/user-not-created-error'
 
 interface RegisterUserUseCaseRequest {

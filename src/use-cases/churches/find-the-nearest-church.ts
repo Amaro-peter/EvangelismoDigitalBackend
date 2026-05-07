@@ -1,4 +1,4 @@
-import { NearbyChurch } from '@repositories/churches-repository'
+import { NearbyChurch } from 'core/contracts/repository/churches-repository.interface'
 import axios, { AxiosResponse } from 'axios'
 
 /* =======================

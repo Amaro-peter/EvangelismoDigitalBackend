@@ -1,6 +1,6 @@
 import { emailSchema } from '@http/schemas/utils/email'
 import { User } from '@prisma/client'
-import { UsersRepository } from '@repositories/users-repository'
+import { UsersRepository } from 'core/contracts/repository/users-repository.interface'
 import { InvalidCredentialsError } from '@use-cases/errors/invalid-credentials-error'
 import { compare } from 'bcryptjs'
 

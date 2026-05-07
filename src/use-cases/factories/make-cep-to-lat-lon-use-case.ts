@@ -7,7 +7,7 @@ import { LocationIqProvider } from 'providers/geo-provider/location-iq-provider'
 import { ResilientGeoProvider } from 'providers/geo-provider/resilient-geo-provider'
 import { env } from '@env/index'
 import { BrasilApiProvider } from 'providers/address-provider/brasil-api-provider'
-import { redisCache, redisRateLimit } from '@lib/redis/clients'
+import { redisCache, redisRateLimit } from '@lib/redis/clients/clients'
 
 let cachedUseCase: CepToLatLonUseCase | null = null
 

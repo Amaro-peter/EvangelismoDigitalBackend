@@ -4,7 +4,7 @@ import { UserAlreadyExistsError } from '@use-cases/errors/user-already-exists-er
 import { registerSchema } from '@http/schemas/users/register-schema'
 import { makeRegisterUserUseCase } from '@use-cases/factories/make-register-user-use-case'
 import { UserPresenter } from '@http/presenters/user-presenter'
-import { UserRole } from '@repositories/users-repository'
+import { UserRole } from 'core/contracts/repository/users-repository.interface'
 
 export async function register(request: FastifyRequest, reply: FastifyReply) {
   try {

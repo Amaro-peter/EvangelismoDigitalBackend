@@ -28,6 +28,11 @@ enum UserRole {
   DEFAULT
 }
 
+enum OutboxEventType {
+  PENDING
+  SENDING
+}
+
 model AuthenticationAudit {
   id         String               @id @default(uuid(7))
   ipAddress  String?              @map("ip_address")
@@ -75,13 +80,27 @@ model FormSubmission {
   publicId         String   @unique @default(uuid(7)) @map("public_id")
   name             String
   lastName         String
-  email            String
+  email            String   @unique
   decisaoPorCristo Boolean
   location         String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
   @@map("form_submissions")
+}
+
+model OutboxEvent {
+  id         Int             @id @default(autoincrement())
+  publicId   String          @unique @default(uuid(7)) @map("public_id")
+  type       String
+  status     OutboxEventType @default(PENDING) @map("status")
+  payload    Json
+  occurredAt DateTime        @default(now()) @map("ocurred_at")
+  sendingAt  DateTime?       @map("sending_at")
+
+  @@index([status, occurredAt])
+  @@index([status, sendingAt])
+  @@map("outbox_events")
 }
 
 model Church {

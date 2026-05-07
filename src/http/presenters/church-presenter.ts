@@ -1,4 +1,4 @@
-import { Church, NearbyChurch } from '@repositories/churches-repository'
+import { Church, NearbyChurch } from 'core/contracts/repository/churches-repository.interface'
 
 type HTTPChurch = {
   publicId: string

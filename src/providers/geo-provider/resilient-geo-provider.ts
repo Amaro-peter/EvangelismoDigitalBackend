@@ -1,18 +1,24 @@
 import { Redis } from 'ioredis'
-import { GeoCacheScope, GeocodingProvider, GeoCoordinates, GeoSearchOptions } from './geo-provider.interface'
+
 import { logger } from '@lib/logger'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
-import { ResilientCache, ResilientCacheOptions, CachedFailureError } from '@lib/redis/helper/resilient-cache'
 import { NoGeoProviderError } from './error/no-geo-provider-error'
 import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-error'
 import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-found-error'
-import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
+import { TimeoutExceededOnFetchError } from '@lib/errors/infra/cache/timeout-exceed-on-fetch-error'
+import {
+  EnumGeoCacheScope,
+  IGeocodingProvider,
+  IGeoCoordinates,
+  IGeoSearchOptions,
+} from 'core/contracts/use-cases/providers/geo-provider.interface'
+import { CachedFailureError, ResilientCache, ResilientCacheOptions } from '@lib/infra/cache/resilient-cache'
 
-export class ResilientGeoProvider implements GeocodingProvider {
+export class ResilientGeoProvider implements IGeocodingProvider {
   private readonly cacheManager: ResilientCache
 
   constructor(
-    private readonly providers: GeocodingProvider[],
+    private readonly providers: IGeocodingProvider[],
     redis: Redis,
     optionsOverride: ResilientCacheOptions,
   ) {
@@ -30,11 +36,11 @@ export class ResilientGeoProvider implements GeocodingProvider {
     })
   }
 
-  async search(query: string, signal?: AbortSignal): Promise<GeoCoordinates | null> {
-    const cacheKey = this.cacheManager.generateKey({ _method: GeoCacheScope.SEARCH, q: query })
+  async search(query: string, signal?: AbortSignal): Promise<IGeoCoordinates | null> {
+    const cacheKey = this.cacheManager.generateKey({ _method: EnumGeoCacheScope.SEARCH, q: query })
 
     try {
-      return await this.cacheManager.getOrFetch<GeoCoordinates>(
+      return await this.cacheManager.getOrFetch<IGeoCoordinates>(
         cacheKey,
         async (effectiveSignal) => {
           return await this.executeStrategy(
@@ -75,14 +81,14 @@ export class ResilientGeoProvider implements GeocodingProvider {
     }
   }
 
-  async searchStructured(options: GeoSearchOptions, signal?: AbortSignal): Promise<GeoCoordinates | null> {
+  async searchStructured(options: IGeoSearchOptions, signal?: AbortSignal): Promise<IGeoCoordinates | null> {
     const cacheKey = this.cacheManager.generateKey({
-      _method: GeoCacheScope.SEARCH_STRUCTURED,
+      _method: EnumGeoCacheScope.SEARCH_STRUCTURED,
       ...options,
     })
 
     try {
-      return await this.cacheManager.getOrFetch<GeoCoordinates>(
+      return await this.cacheManager.getOrFetch<IGeoCoordinates>(
         cacheKey,
         async (effectiveSignal) => {
           return await this.executeStrategy(
@@ -124,9 +130,9 @@ export class ResilientGeoProvider implements GeocodingProvider {
   }
 
   private async executeStrategy(
-    action: (provider: GeocodingProvider, signal: AbortSignal) => Promise<GeoCoordinates | null>,
+    action: (provider: IGeocodingProvider, signal: AbortSignal) => Promise<IGeoCoordinates | null>,
     signal: AbortSignal,
-  ): Promise<GeoCoordinates> {
+  ): Promise<IGeoCoordinates> {
     let lastError: Error | unknown = undefined
     let hasSystemError = false
     let lastProviderName = ''

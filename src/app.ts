@@ -5,13 +5,14 @@ import { logger, runWithRequestId, runWithUserContext } from '@lib/logger'
 import { logError } from '@lib/logger/helpers'
 import { v7 as uuidv7 } from 'uuid'
 import z, { ZodError } from 'zod'
-import { messages } from '@constants/messages'
+import { messages } from 'core/constants/messages'
 import fastifyJwt from '@fastify/jwt'
 import fastifyCors from '@fastify/cors'
 import * as Sentry from '@sentry/node'
 import { nodeProfilingIntegration } from '@sentry/profiling-node'
-import { closeAllRedisConnections } from '@lib/redis/clients'
-import { RedisRateLimiter } from '@lib/redis/helper/rate-limiter'
+import { RedisRateLimiter } from '@lib/infra/rate-limiter/rate-limiter'
+import { asyncContext } from '@http/plugins/async-context.plugin'
+import { closeAllRedisConnections } from '@lib/redis/clients/clients'
 z.config(z.locales.pt())
 
 export const app = fastify({
@@ -48,6 +49,8 @@ if (env.NODE_ENV === 'production') {
     }
   }, 60000)
 }
+
+app.register(asyncContext)
 
 app.addHook('onRequest', (request, _reply, done) => {
   const requestId = uuidv7()

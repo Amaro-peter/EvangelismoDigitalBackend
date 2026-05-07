@@ -1,5 +1,5 @@
 import { User } from '@prisma/client'
-import { UsersRepository } from '@repositories/users-repository'
+import { UsersRepository } from 'core/contracts/repository/users-repository.interface'
 import { ResourceNotFoundError } from '@use-cases/errors/resource-not-found-error'
 
 type ListUsersUseCaseResponse = {

@@ -64,16 +64,16 @@ vi.mock('@lib/redis/helper/resilient-cache', () => {
 // Imports reais
 import Redis from 'ioredis'
 import { ResilientAddressProvider } from './resilient-address-provider'
-import { AddressProvider, AddressData } from './address-provider.interface'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 import { NoAddressProviderError } from './error/no-address-provider-error'
 import { AddressProviderFailureError } from './error/address-provider-failure-error'
 import { AddressServiceBusyError } from '@use-cases/errors/address-service-busy-error'
-import { TimeoutExceededOnFetchError } from '@lib/redis/errors/timeout-exceed-on-fetch-error'
-import { CachedFailureError } from '@lib/redis/helper/resilient-cache'
+import { TimeoutExceededOnFetchError } from '@lib/errors/infra/cache/timeout-exceed-on-fetch-error'
+import { IAddressData, IAddressProvider } from 'core/contracts/use-cases/providers/address-provider.interface'
+import { CachedFailureError } from '@lib/infra/cache/resilient-cache'
 
 // Helper: Objeto mockado estritamente tipado conforme AddressData
-const mockAddress: AddressData = {
+const mockAddress: IAddressData = {
   logradouro: 'Rua Teste',
   bairro: 'Bairro Teste',
   localidade: 'Cidade Teste',
@@ -82,8 +82,8 @@ const mockAddress: AddressData = {
 
 describe('ResilientAddressProvider Unit Tests', () => {
   let redisClient: Redis
-  let provider1: AddressProvider
-  let provider2: AddressProvider
+  let provider1: IAddressProvider
+  let provider2: IAddressProvider
 
   beforeEach(() => {
     vi.clearAllMocks()

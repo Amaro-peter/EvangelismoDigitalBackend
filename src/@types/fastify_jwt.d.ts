@@ -1,5 +1,5 @@
 import '@fastify/jwt'
-import { UserRole } from '@repositories/users-repository'
+import { UserRole } from 'core/contracts/repository/users-repository.interface'
 
 declare module '@fastify/jwt' {
   export interface FastifyJWT {

@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client'
-import { ChurchesRepository } from '@repositories/churches-repository'
+import { ChurchesRepository } from 'core/contracts/repository/churches-repository.interface'
 import { ChurchAlreadyExistsError } from '@use-cases/errors/church-already-exists-error'
 import { CreateChurchError } from '@use-cases/errors/create-church-error'
 import { NoAddressError } from '@use-cases/errors/no-address-error'

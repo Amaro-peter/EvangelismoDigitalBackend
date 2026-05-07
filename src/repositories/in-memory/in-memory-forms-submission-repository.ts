@@ -1,5 +1,5 @@
 import { FormSubmission } from '@prisma/client'
-import { FormsRepository } from '@repositories/forms-repository'
+import { FormsRepository } from 'core/contracts/repository/forms-repository.interface'
 import { randomUUID } from 'node:crypto'
 
 export class InMemoryFormsSubmissionRepository implements FormsRepository {

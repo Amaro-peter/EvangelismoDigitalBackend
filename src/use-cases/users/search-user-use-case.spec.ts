@@ -1,7 +1,7 @@
 import { InMemoryUsersRepository } from '@repositories/in-memory/in-memory-users-repository'
 import { describe, it, expect, vi } from 'vitest'
 import { RegisterUserUseCase } from './register-user'
-import { UserRole } from '@repositories/users-repository'
+import { UserRole } from 'core/contracts/repository/users-repository.interface'
 import { cpf as cpfValidator } from 'cpf-cnpj-validator'
 import { ResourceNotFoundError } from '@use-cases/errors/resource-not-found-error'
 import { SearchUsersUseCase } from './search-users-use-case'

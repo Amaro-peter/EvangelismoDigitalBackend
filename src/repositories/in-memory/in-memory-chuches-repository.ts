@@ -5,7 +5,7 @@ import {
   ChurchAlreadyExists,
   NearbyChurch,
   FindNearbyParams,
-} from '@repositories/churches-repository'
+} from 'core/contracts/repository/churches-repository.interface'
 import { randomUUID } from 'node:crypto'
 
 export class InMemoryChurchesRepository implements ChurchesRepository {

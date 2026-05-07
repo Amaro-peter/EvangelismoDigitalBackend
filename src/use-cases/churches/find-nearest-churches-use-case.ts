@@ -1,4 +1,4 @@
-import { ChurchesRepository, NearbyChurch } from '@repositories/churches-repository'
+import { ChurchesRepository, NearbyChurch } from 'core/contracts/repository/churches-repository.interface'
 import { LatitudeRangeError } from '@use-cases/errors/latitude-range-error'
 import { LongitudeRangeError } from '@use-cases/errors/longitude-range-error'
 

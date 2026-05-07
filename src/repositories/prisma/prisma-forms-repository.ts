@@ -1,11 +1,48 @@
-import { prisma } from '@lib/prisma'
-import { Prisma } from '@prisma/client'
-import { FormsRepository } from '@repositories/forms-repository'
+import { DatabaseContext } from '@lib/prisma/helpers/database-context'
+import { PrismaHTTPErrorMapper } from '@lib/prisma/utils/prisma-http-error-mapper'
+import { formsErrorMapping } from '@use-cases/errors/forms/forms-error-mapper'
+import { FormsNotFoundError } from '@use-cases/errors/forms/forms-not-found-error'
+import {
+  FormsRepository,
+  IFormSubmission,
+  IFormSubmissionInputData,
+} from 'core/contracts/repository/forms-repository.interface'
+import { err, ok, Result } from 'core/shared/result'
 
 export class PrismaFormsRepository implements FormsRepository {
-  async create(data: Prisma.FormSubmissionCreateInput) {
-    return await prisma.formSubmission.create({
-      data,
-    })
+  private httpErrorMapper = new PrismaHTTPErrorMapper(formsErrorMapping.http)
+
+  constructor(private readonly dbContext: DatabaseContext) {}
+
+  async create(data: IFormSubmissionInputData): Promise<Result<IFormSubmission, Error>> {
+    try {
+      const formSubmission = await this.dbContext.client.formSubmission.create({
+        data,
+      })
+
+      return ok(formSubmission)
+    } catch (error) {
+      const domainError = this.httpErrorMapper.mapToKnownError(error)
+      return err(domainError)
+    }
+  }
+
+  async findByEmail(email: string): Promise<Result<IFormSubmission, Error>> {
+    try {
+      const formSubmission = await this.dbContext.client.formSubmission.findUnique({
+        where: {
+          email,
+        },
+      })
+
+      if (!formSubmission) {
+        return err(new FormsNotFoundError())
+      }
+
+      return ok(formSubmission)
+    } catch (error) {
+      const domainError = this.httpErrorMapper.mapToKnownError(error)
+      return err(domainError)
+    }
   }
 }

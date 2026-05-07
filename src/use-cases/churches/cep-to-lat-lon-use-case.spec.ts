@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest'
 import { CepToLatLonUseCase } from './cep-to-lat-lon-use-case'
-import { AddressProvider } from 'providers/address-provider/address-provider.interface'
-import { GeocodingProvider, GeoPrecision, GeoCoordinates } from 'providers/geo-provider/geo-provider.interface'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-found-error'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { CepToLatLonError } from '@use-cases/errors/cep-to-lat-lon-error'
 import { Redis } from 'ioredis'
 import { CachedFailureError } from '@lib/redis/helper/resilient-cache'
+import { GeocodingProvider, GeoPrecision } from 'core/contracts/use-cases/providers/geo-provider.interface'
+import { AddressProvider } from 'core/contracts/use-cases/providers/address-provider.interface'
 
 // --- 1. Mocks de Infraestrutura ---
 vi.mock('@lib/env', () => ({
