@@ -1,5 +1,5 @@
 import { DatabaseContext } from '@lib/prisma/helpers/database-context'
-import { PrismaHTTPErrorMapper } from '@lib/prisma/utils/prisma-http-error-mapper'
+import { PrismaErrorMapper } from '@lib/prisma/utils/prisma-error-mapper'
 import { formsErrorMapping } from '@use-cases/errors/forms/forms-error-mapper'
 import { FormsNotFoundError } from '@use-cases/errors/forms/forms-not-found-error'
 import {
@@ -10,7 +10,7 @@ import {
 import { err, ok, Result } from 'core/shared/result'
 
 export class PrismaFormsRepository implements FormsRepository {
-  private httpErrorMapper = new PrismaHTTPErrorMapper(formsErrorMapping.http)
+  private httpErrorMapper = new PrismaErrorMapper(formsErrorMapping)
 
   constructor(private readonly dbContext: DatabaseContext) {}
 
@@ -29,7 +29,7 @@ export class PrismaFormsRepository implements FormsRepository {
 
   async findByEmail(email: string): Promise<Result<IFormSubmission, Error>> {
     try {
-      const formSubmission = await this.dbContext.client.formSubmission.findUnique({
+      const formSubmission = await this.dbContext.client.formSubmission.findFirst({
         where: {
           email,
         },

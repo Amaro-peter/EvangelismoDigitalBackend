@@ -1,5 +1,4 @@
-import { PrismaHTTPErrorMapping } from '@lib/prisma/utils/prisma-http-error-mapper'
-import { PrismaInfraErrorMapping } from '@lib/prisma/utils/prisma-infra-error-mapper'
+import { PrismaErrorMapping } from '@lib/prisma/utils/prisma-error-mapper'
 import {
   OutboxEventNotFoundHttpError,
   OutboxEventNotFoundInfraError,
@@ -12,11 +11,11 @@ export const outboxErrorMapping = {
   http: {
     P2025: () => new OutboxEventNotFoundHttpError(),
     P2003: () => new OutboxOperationFailedHttpError(),
-  } as PrismaHTTPErrorMapping,
+  } as PrismaErrorMapping,
 
   // Contexto dos Workers/Background (recuperação, status, deleção)
   infra: {
     P2025: (err?: unknown) => new OutboxEventNotFoundInfraError(err),
     P2003: (err?: unknown) => new OutboxOperationFailedInfraError(err),
-  } as PrismaInfraErrorMapping,
+  } as PrismaErrorMapping,
 }

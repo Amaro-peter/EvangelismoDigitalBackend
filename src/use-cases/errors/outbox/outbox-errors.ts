@@ -1,21 +1,22 @@
-import { HTTPDomainError } from 'errors/http-errors/http-domain-error'
-import { HTTPSystemError } from 'errors/http-errors/http-system-error'
-import { InfrastructureError } from 'errors/infra-errors/infrastructure-error'
+import { InfrastructureError } from 'errors/infrastructure-error'
+import { ErrorType } from 'core/types/error-type/error-type'
 import {
   OUTBOX_EVENT_NOT_FOUND_ERROR,
   OUTBOX_OPERATION_FAILED_ERROR,
 } from 'messages/errors/use-cases/outbox-events/outbox-error-messages'
+import { SystemError } from 'errors/system-error'
+import { DomainError } from 'errors/domain-error'
 
 // --- Contexto HTTP (Disparado pela API durante o cadastro) ---
-export class OutboxEventNotFoundHttpError extends HTTPDomainError {
+export class OutboxEventNotFoundHttpError extends DomainError {
   constructor() {
-    super(OUTBOX_EVENT_NOT_FOUND_ERROR, 404)
+    super(OUTBOX_EVENT_NOT_FOUND_ERROR, ErrorType.NOT_FOUND)
   }
 }
 
-export class OutboxOperationFailedHttpError extends HTTPSystemError {
+export class OutboxOperationFailedHttpError extends SystemError {
   constructor() {
-    super(OUTBOX_OPERATION_FAILED_ERROR, 500)
+    super(OUTBOX_OPERATION_FAILED_ERROR, ErrorType.INTERNAL_SERVER_ERROR)
   }
 }
 

@@ -1,17 +1,19 @@
 import { FastifyReply } from 'fastify'
-import { HTTPDomainError } from './http-domain-error'
-import { HTTPSystemError } from 'errors/http-errors/http-system-error'
+import { DomainError } from '../domain-error'
+import { toHttpStatus } from './http-error-status.mapper'
 
 export class HttpErrorMapper {
   static map(error: Error, reply: FastifyReply) {
-    if (error instanceof HTTPDomainError || error instanceof HTTPSystemError) {
-      return reply.status(error.statusCode).send({
+    if (error instanceof DomainError) {
+      const httpCode = toHttpStatus(error.type)
+      return reply.status(httpCode).send({
         message: error.body.message,
         code: error.body.code,
         issues: error.body.issues,
       })
     }
 
+    // Handle unknown errors
     throw error
   }
 }

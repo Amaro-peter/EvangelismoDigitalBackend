@@ -1,19 +1,20 @@
-import { IAppError } from 'core/contracts/errors/app-error.interface'
-import { IErrorDetail } from 'core/contracts/errors/error-detail.interface'
+import { IAppError } from "core/contracts/errors/app-error.interface"
+import { IErrorDetail } from "core/contracts/errors/error-detail.interface"
+import { ErrorType } from "core/types/error-type/error-type"
 
-export abstract class BaseError extends Error implements IAppError {
-  public statusCode: number
+export abstract class AppError extends Error implements IAppError {
+  public type: ErrorType
   public body: IErrorDetail
 
   /**
    * @param detail – the error descriptor (code + message + optional extras)
-   * @param statusCode – the protocol status code to be sent in the response. If not provided, it should be set by the subclass.
+   * @param type – the error type
    */
-  protected constructor(detail: IErrorDetail, statusCode: number) {
+  protected constructor(detail: IErrorDetail, type: ErrorType) {
     super(detail.message)
 
     this.name = this.constructor.name
-    this.statusCode = statusCode
+    this.type = type
 
     this.body = {
       code: detail.code,
@@ -24,12 +25,7 @@ export abstract class BaseError extends Error implements IAppError {
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, this.constructor)
     }
-  }
 
-  toJSON(): IErrorDetail & { statusCode: number } {
-    return {
-      statusCode: this.statusCode,
-      ...this.body,
-    }
+    Object.setPrototypeOf(this, new.target.prototype)
   }
 }

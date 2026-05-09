@@ -1,5 +1,5 @@
 import { DatabaseContext } from '@lib/prisma/helpers/database-context'
-import { PrismaInfraErrorMapper } from '@lib/prisma/utils/prisma-infra-error-mapper'
+import { PrismaErrorMapper } from '@lib/prisma/utils/prisma-error-mapper'
 import { Prisma } from '@prisma/client'
 import { outboxErrorMapping } from '@use-cases/errors/outbox/outbox-error-mapper'
 import { err, ok, Result } from 'core/shared/result'
@@ -9,11 +9,10 @@ import {
   IOutBoxEventInputData,
   IOutboxEventType,
 } from 'core/contracts/repository/outbox-repository.interface'
-import { PrismaHTTPErrorMapper } from '@lib/prisma/utils/prisma-http-error-mapper'
 
 export class PrismaOutboxRepository implements IOutboxRepository {
-  private httpErrorMapper = new PrismaHTTPErrorMapper(outboxErrorMapping.http)
-  private infraErrorMapper = new PrismaInfraErrorMapper(outboxErrorMapping.infra)
+  private httpErrorMapper = new PrismaErrorMapper(outboxErrorMapping.http)
+  private infraErrorMapper = new PrismaErrorMapper(outboxErrorMapping.infra)
 
   constructor(private readonly dbContext: DatabaseContext) {}
 
