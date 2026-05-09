@@ -1,6 +1,6 @@
 import { IErrorDetail } from 'core/contracts/errors/error-detail.interface'
 import { ErrorType } from 'core/types/error-type/error-type'
-import { AppError } from 'errors/base-error'
+import { AppError } from 'errors/app-error'
 
 export abstract class InfrastructureError extends AppError {
   public readonly originalError?: unknown

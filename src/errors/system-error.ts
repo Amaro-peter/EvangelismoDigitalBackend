@@ -1,5 +1,5 @@
 import { ErrorType } from "core/types/error-type/error-type";
-import { AppError } from "./base-error";
+import { AppError } from "./app-error";
 import { IErrorDetail } from "core/contracts/errors/error-detail.interface";
 
 
