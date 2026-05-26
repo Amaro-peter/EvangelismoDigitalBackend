@@ -2,16 +2,6 @@
 
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 
-// 1. Mocks de Ambiente e Logger
-vi.mock('@lib/env', () => ({
-  env: {
-    NODE_ENV: 'test',
-    LOG_LEVEL: 'silent',
-    REDIS_HOST: 'localhost',
-    REDIS_PORT: 6379,
-  },
-}))
-
 vi.mock('@lib/logger', () => ({
   logger: {
     info: vi.fn(),
@@ -21,50 +11,7 @@ vi.mock('@lib/logger', () => ({
   },
 }))
 
-// 2. Mock do IORedis
-vi.mock('ioredis', () => {
-  return {
-    default: vi.fn(),
-    Redis: vi.fn(),
-  }
-})
-
-// 3. Mock do ResilientCache e CachedFailureError
-// Usamos vi.hoisted para variáveis acessíveis dentro e fora do mock
-const { mockGetOrFetch, mockGenerateKey } = vi.hoisted(() => {
-  return {
-    mockGetOrFetch: vi.fn(),
-    mockGenerateKey: vi.fn().mockReturnValue('mock-geo-key'),
-  }
-})
-
-vi.mock('@lib/redis/helper/resilient-cache', () => {
-  class MockCachedFailureError extends Error {
-    public errorType: string
-    public errorData?: any
-
-    constructor(type: string, message: string, data?: any) {
-      super(message)
-      this.name = 'CachedFailureError'
-      this.errorType = type
-      this.errorData = data
-    }
-  }
-
-  return {
-    // Usamos function() tradicional para permitir 'new ResilientCache()'
-    ResilientCache: vi.fn().mockImplementation(function () {
-      return {
-        getOrFetch: mockGetOrFetch,
-        generateKey: mockGenerateKey,
-      }
-    }),
-    CachedFailureError: MockCachedFailureError,
-  }
-})
-
 // Imports reais
-import Redis from 'ioredis'
 import { ResilientGeoProvider } from './resilient-geo-provider'
 import {
   GeocodingProvider,
@@ -77,7 +24,6 @@ import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-
 import { NoGeoProviderError } from './error/no-geo-provider-error'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { TimeoutExceededOnFetchError } from '@lib/errors/infra/cache/timeout-exceed-on-fetch-error'
-import { CachedFailureError } from '@lib/redis/helper/resilient-cache'
 
 // Helper: Objeto mockado estritamente tipado conforme GeoCoordinates
 const mockCoords: GeoCoordinates = {
@@ -95,31 +41,20 @@ const mockSearchOptions: GeoSearchOptions = {
 }
 
 describe('ResilientGeoProvider Unit Tests', () => {
-  let redisClient: Redis
   let provider1: GeocodingProvider
   let provider2: GeocodingProvider
 
   beforeEach(() => {
     vi.clearAllMocks()
-    redisClient = new Redis()
 
     // Mocks dos providers tipados como GeocodingProvider
     provider1 = { search: vi.fn(), searchStructured: vi.fn() }
     provider2 = { search: vi.fn(), searchStructured: vi.fn() }
 
-    // Mock padrão do getOrFetch para simular Cache Miss (executa o fetcher real)
-    mockGetOrFetch.mockImplementation(async (key, fetcher, mapper, signal) => {
-      const effectiveSignal = signal || new AbortController().signal
-      return fetcher(effectiveSignal)
-    })
   })
 
   const createProvider = (providers = [provider1, provider2]) => {
-    return new ResilientGeoProvider(providers, redisClient, {
-      prefix: 'geo-test:',
-      defaultTtlSeconds: 60,
-      negativeTtlSeconds: 10,
-    } as any)
+    return new ResilientGeoProvider(providers)
   }
 
   describe('Constructor', () => {
@@ -133,39 +68,8 @@ describe('ResilientGeoProvider Unit Tests', () => {
     })
   })
 
-  describe('search - Cache Logic', () => {
-    it('should return coordinates from CACHE HIT without calling providers', async () => {
-      const provider = createProvider()
-
-      // Simula Cache Hit (retorna valor GeoCoordinates direto)
-      mockGetOrFetch.mockResolvedValue(mockCoords)
-
-      const result = await provider.search('Av Paulista')
-
-      expect(result).toEqual(mockCoords)
-      expect(mockGetOrFetch).toHaveBeenCalled()
-      expect(provider1.search).not.toHaveBeenCalled()
-    })
-
-    it('should re-throw CoordinatesNotFoundError from CACHE HIT (Cached Failure)', async () => {
-      const provider = createProvider()
-
-      const cachedError = new CachedFailureError('CoordinatesNotFoundError', 'Não encontrado')
-      mockGetOrFetch.mockRejectedValue(cachedError)
-
-      await expect(provider.search('Rua Inexistente')).rejects.toThrow(CoordinatesNotFoundError)
-    })
-
-    it('should throw GeoProviderFailureError on CACHE HIT with unexpected error type', async () => {
-      const provider = createProvider()
-
-      const cachedError = new CachedFailureError('UnknownError', 'Algo estranho')
-      mockGetOrFetch.mockRejectedValue(cachedError)
-
-      await expect(provider.search('Query')).rejects.toThrow(GeoProviderFailureError)
-    })
-
-    it('should execute fetch strategy on CACHE MISS', async () => {
+  describe('search', () => {
+    it('should return coordinates from the first provider', async () => {
       const provider = createProvider()
 
       vi.spyOn(provider1, 'search').mockResolvedValue(mockCoords)
@@ -173,29 +77,20 @@ describe('ResilientGeoProvider Unit Tests', () => {
       const result = await provider.search('Av Paulista')
 
       expect(result).toEqual(mockCoords)
-      expect(provider1.search).toHaveBeenCalled()
+      expect(provider1.search).toHaveBeenCalledWith('Av Paulista', expect.any(AbortSignal))
     })
   })
 
-  describe('searchStructured - Cache Logic', () => {
-    it('should return coordinates from CACHE HIT', async () => {
+  describe('searchStructured', () => {
+    it('should return coordinates from the first provider', async () => {
       const provider = createProvider()
-      mockGetOrFetch.mockResolvedValue(mockCoords)
 
-      const result = await provider.searchStructured(mockSearchOptions)
-
-      expect(result).toEqual(mockCoords)
-      expect(provider1.searchStructured).not.toHaveBeenCalled()
-    })
-
-    it('should execute fetch strategy on CACHE MISS', async () => {
-      const provider = createProvider()
       vi.spyOn(provider1, 'searchStructured').mockResolvedValue(mockCoords)
 
       const result = await provider.searchStructured(mockSearchOptions)
 
       expect(result).toEqual(mockCoords)
-      expect(provider1.searchStructured).toHaveBeenCalledWith(mockSearchOptions, expect.anything())
+      expect(provider1.searchStructured).toHaveBeenCalledWith(mockSearchOptions, expect.any(AbortSignal))
     })
   })
 
@@ -330,57 +225,9 @@ describe('ResilientGeoProvider Unit Tests', () => {
       const controller = new AbortController()
       controller.abort(new Error('Timeout'))
 
-      mockGetOrFetch.mockImplementation(async (key, fetcher, mapper, signal) => {
-        // Passamos o signal cancelado para o fetcher
-        return fetcher(signal)
-      })
-
       await expect(provider.search('Query', controller.signal)).rejects.toThrow(TimeoutExceededOnFetchError)
 
       expect(provider1.search).not.toHaveBeenCalled()
-    })
-  })
-
-  describe('Error Mapper Logic', () => {
-    it('should map CoordinatesNotFoundError to cacheable object', async () => {
-      const provider = createProvider()
-      let interceptedMapper: any
-
-      // Intercepta o errorMapper passado para o cache
-      mockGetOrFetch.mockImplementation(async (key, fetcher, errorMapper) => {
-        interceptedMapper = errorMapper
-        return null // Simula execução sem retorno para permitir teste do mapper
-      })
-
-      await provider.search('Query')
-
-      expect(interceptedMapper).toBeDefined()
-
-      const error = new CoordinatesNotFoundError()
-      const mapped = interceptedMapper(error)
-
-      expect(mapped).toEqual({
-        type: 'CoordinatesNotFoundError',
-        message: expect.any(String),
-        data: { query: 'Query' },
-      })
-    })
-
-    it('should return NULL for system errors (preventing cache)', async () => {
-      const provider = createProvider()
-      let interceptedMapper: any
-
-      mockGetOrFetch.mockImplementation(async (key, fetcher, errorMapper) => {
-        interceptedMapper = errorMapper
-        return null
-      })
-
-      await provider.search('Query')
-
-      const error = new Error('System Crash')
-      const mapped = interceptedMapper(error)
-
-      expect(mapped).toBeNull()
     })
   })
 })

@@ -18,8 +18,8 @@ import { ChurchAlreadyExistsError } from '@use-cases/errors/church-already-exist
  * planner to prune irrelevant partitions and speed up scans/index lookups.
  *
  * Note: Prisma doesn't natively support partitioning in its schema, so apply it via custom SQL
- * migrations (e.g., in a Prisma migration file or postgis_trigger_setup.sql). Prisma will query the
- * partitioned table transparently.
+ * migrations (e.g., in a Prisma migration file). Prisma will query the partitioned table
+ * transparently.
  *
  * Steps to Implement:
  * 1. Add a 'region' column to the Prisma schema and table:
@@ -215,7 +215,7 @@ export class PrismaChurchesRepository implements ChurchesRepository {
       `
       return church
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
         throw new ChurchAlreadyExistsError()
       }
       throw error

@@ -5,7 +5,7 @@ import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-foun
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { CepToLatLonError } from '@use-cases/errors/cep-to-lat-lon-error'
 import { Redis } from 'ioredis'
-import { CachedFailureError } from '@lib/redis/helper/resilient-cache'
+import { CachedFailureError } from '@lib/infra/cache/resilient-cache'
 import { GeocodingProvider, GeoPrecision } from 'core/contracts/use-cases/providers/geo-provider.interface'
 import { AddressProvider } from 'core/contracts/use-cases/providers/address-provider.interface'
 
@@ -40,7 +40,7 @@ vi.mock('ioredis', () => {
 const mockGetOrFetch = vi.fn()
 const mockGenerateKey = vi.fn()
 
-vi.mock('@lib/redis/helper/resilient-cache', () => {
+vi.mock('@lib/infra/cache/resilient-cache', () => {
   return {
     // Return a real class so 'new ResilientCache()' works
     ResilientCache: class ResilientCacheMock {

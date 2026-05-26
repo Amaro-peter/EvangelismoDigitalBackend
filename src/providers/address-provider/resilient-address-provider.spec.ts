@@ -1,15 +1,5 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 
-// 1. Mocks de Ambiente e Logger
-vi.mock('@lib/env', () => ({
-  env: {
-    NODE_ENV: 'test',
-    LOG_LEVEL: 'silent',
-    REDIS_HOST: 'localhost',
-    REDIS_PORT: 6379,
-  },
-}))
-
 vi.mock('@lib/logger', () => ({
   logger: {
     info: vi.fn(),
@@ -19,50 +9,7 @@ vi.mock('@lib/logger', () => ({
   },
 }))
 
-// 2. Mock do IORedis
-vi.mock('ioredis', () => {
-  return {
-    default: vi.fn(),
-    Redis: vi.fn(),
-  }
-})
-
-// 3. Mock do ResilientCache e CachedFailureError
-// Usamos vi.hoisted para variáveis acessíveis dentro e fora do mock
-const { mockGetOrFetch, mockGenerateKey } = vi.hoisted(() => {
-  return {
-    mockGetOrFetch: vi.fn(),
-    mockGenerateKey: vi.fn().mockReturnValue('mock-key'),
-  }
-})
-
-vi.mock('@lib/redis/helper/resilient-cache', () => {
-  class MockCachedFailureError extends Error {
-    public errorType: string
-    public errorData?: any
-
-    constructor(type: string, message: string, data?: any) {
-      super(message)
-      this.name = 'CachedFailureError'
-      this.errorType = type
-      this.errorData = data
-    }
-  }
-
-  return {
-    // Usamos function() tradicional para permitir 'new ResilientCache()'
-    ResilientCache: vi.fn().mockImplementation(function () {
-      return {
-        getOrFetch: mockGetOrFetch,
-        generateKey: mockGenerateKey,
-      }
-    }),
-    CachedFailureError: MockCachedFailureError,
-  }
-})
-
 // Imports reais
-import Redis from 'ioredis'
 import { ResilientAddressProvider } from './resilient-address-provider'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 import { NoAddressProviderError } from './error/no-address-provider-error'
@@ -70,7 +17,6 @@ import { AddressProviderFailureError } from './error/address-provider-failure-er
 import { AddressServiceBusyError } from '@use-cases/errors/address-service-busy-error'
 import { TimeoutExceededOnFetchError } from '@lib/errors/infra/cache/timeout-exceed-on-fetch-error'
 import { IAddressData, IAddressProvider } from 'core/contracts/use-cases/providers/address-provider.interface'
-import { CachedFailureError } from '@lib/infra/cache/resilient-cache'
 
 // Helper: Objeto mockado estritamente tipado conforme AddressData
 const mockAddress: IAddressData = {
@@ -81,32 +27,20 @@ const mockAddress: IAddressData = {
 }
 
 describe('ResilientAddressProvider Unit Tests', () => {
-  let redisClient: Redis
   let provider1: IAddressProvider
   let provider2: IAddressProvider
 
   beforeEach(() => {
     vi.clearAllMocks()
-    redisClient = new Redis()
 
     // Mocks dos providers tipados como AddressProvider
     provider1 = { fetchAddress: vi.fn() }
     provider2 = { fetchAddress: vi.fn() }
 
-    // Mock padrão do getOrFetch para simular Cache Miss (executa o fetcher real)
-    // CORREÇÃO: Garante que um AbortSignal seja passado, mesmo que undefined no teste
-    mockGetOrFetch.mockImplementation(async (key, fetcher, mapper, signal) => {
-      const effectiveSignal = signal || new AbortController().signal
-      return fetcher(effectiveSignal)
-    })
   })
 
   const createProvider = (providers = [provider1, provider2]) => {
-    return new ResilientAddressProvider(providers, redisClient, {
-      prefix: 'test:',
-      defaultTtlSeconds: 60,
-      negativeTtlSeconds: 10,
-    } as any)
+    return new ResilientAddressProvider(providers)
   }
 
   describe('Constructor', () => {
@@ -117,50 +51,6 @@ describe('ResilientAddressProvider Unit Tests', () => {
     it('should initialize successfully with valid providers', () => {
       const provider = createProvider()
       expect(provider).toBeInstanceOf(ResilientAddressProvider)
-    })
-  })
-
-  describe('fetchAddress - Cache Logic', () => {
-    it('should return address from CACHE HIT without calling providers', async () => {
-      const provider = createProvider()
-
-      // Simula Cache Hit (retorna valor AddressData direto)
-      mockGetOrFetch.mockResolvedValue(mockAddress)
-
-      const result = await provider.fetchAddress('12345678')
-
-      expect(result).toEqual(mockAddress)
-      expect(mockGetOrFetch).toHaveBeenCalled()
-      expect(provider1.fetchAddress).not.toHaveBeenCalled()
-    })
-
-    it('should re-throw InvalidCepError from CACHE HIT (Cached Failure)', async () => {
-      const provider = createProvider()
-
-      const cachedError = new CachedFailureError('InvalidCepError', 'CEP inválido')
-      mockGetOrFetch.mockRejectedValue(cachedError)
-
-      await expect(provider.fetchAddress('12345678')).rejects.toThrow(InvalidCepError)
-    })
-
-    it('should throw AddressProviderFailureError on CACHE HIT with unexpected error type', async () => {
-      const provider = createProvider()
-
-      const cachedError = new CachedFailureError('UnknownError', 'Algo estranho')
-      mockGetOrFetch.mockRejectedValue(cachedError)
-
-      await expect(provider.fetchAddress('12345678')).rejects.toThrow(AddressProviderFailureError)
-    })
-
-    it('should execute fetch strategy on CACHE MISS', async () => {
-      const provider = createProvider()
-
-      vi.spyOn(provider1, 'fetchAddress').mockResolvedValue(mockAddress)
-
-      const result = await provider.fetchAddress('12345678')
-
-      expect(result).toEqual(mockAddress)
-      expect(provider1.fetchAddress).toHaveBeenCalled()
     })
   })
 
@@ -293,56 +183,9 @@ describe('ResilientAddressProvider Unit Tests', () => {
       const controller = new AbortController()
       controller.abort(new Error('Timeout'))
 
-      mockGetOrFetch.mockImplementation(async (key, fetcher, mapper, signal) => {
-        // Neste caso específico, queremos testar o repasse do sinal abortado
-        return fetcher(signal)
-      })
-
       await expect(provider.fetchAddress('12345678', controller.signal)).rejects.toThrow(TimeoutExceededOnFetchError)
 
       expect(provider1.fetchAddress).not.toHaveBeenCalled()
-    })
-  })
-
-  describe('Error Mapper Logic', () => {
-    it('should map InvalidCepError to cacheable object', async () => {
-      const provider = createProvider()
-      let interceptedMapper: any
-
-      mockGetOrFetch.mockImplementation(async (key, fetcher, errorMapper) => {
-        interceptedMapper = errorMapper
-        return null
-      })
-
-      await provider.fetchAddress('12345678')
-
-      expect(interceptedMapper).toBeDefined()
-
-      const error = new InvalidCepError()
-      const mapped = interceptedMapper(error)
-
-      expect(mapped).toEqual({
-        type: 'InvalidCepError',
-        message: expect.any(String),
-        data: { cep: '12345678' },
-      })
-    })
-
-    it('should return NULL for system errors (preventing cache)', async () => {
-      const provider = createProvider()
-      let interceptedMapper: any
-
-      mockGetOrFetch.mockImplementation(async (key, fetcher, errorMapper) => {
-        interceptedMapper = errorMapper
-        return null
-      })
-
-      await provider.fetchAddress('12345678')
-
-      const error = new Error('System Crash')
-      const mapped = interceptedMapper(error)
-
-      expect(mapped).toBeNull()
     })
   })
 })

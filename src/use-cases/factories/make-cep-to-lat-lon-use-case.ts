@@ -36,13 +36,7 @@ export function makeCepToLatLonUseCase(
   )
 
   // Setup Resilient Geo Strategy
-  const resilientGeoProvider = new ResilientGeoProvider([locationIqProvider, nominatimProvider], redisCacheConnection, {
-    prefix: 'cache:geocoding:',
-    defaultTtlSeconds: 60 * 60 * 24 * 7, // 7 days
-    negativeTtlSeconds: 60 * 30, // 30 minutes (Negative Cache)
-    maxPendingFetches: 500,
-    fetchTimeoutMs: 12000,
-  })
+  const resilientGeoProvider = new ResilientGeoProvider([locationIqProvider, nominatimProvider])
 
   // Setup Address Providers
   const awesomeApiProvider = new AwesomeApiProvider(
@@ -67,17 +61,7 @@ export function makeCepToLatLonUseCase(
     redisRateLimitConnection,
   )
 
-  const resilientAddressProvider = new ResilientAddressProvider(
-    [awesomeApiProvider, brasilApiProvider, viaCepProvider],
-    redisCacheConnection,
-    {
-      prefix: 'cache:cep:',
-      defaultTtlSeconds: 60 * 60 * 24 * 7, // 7 days
-      negativeTtlSeconds: 60 * 30, // 30 minutes
-      maxPendingFetches: 500,
-      fetchTimeoutMs: 8000,
-    },
-  )
+  const resilientAddressProvider = new ResilientAddressProvider([awesomeApiProvider, brasilApiProvider, viaCepProvider])
 
   // Create Use Case
   cachedUseCase = new CepToLatLonUseCase(resilientGeoProvider, resilientAddressProvider, redisCacheConnection, {

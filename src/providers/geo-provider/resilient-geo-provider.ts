@@ -1,5 +1,3 @@
-import { Redis } from 'ioredis'
-
 import { logger } from '@lib/logger'
 import { GeoServiceBusyError } from '@use-cases/errors/geo-service-busy-error'
 import { NoGeoProviderError } from './error/no-geo-provider-error'
@@ -7,126 +5,34 @@ import { GeoProviderFailureError } from '@use-cases/errors/geo-provider-failure-
 import { CoordinatesNotFoundError } from '@use-cases/errors/coordinates-not-found-error'
 import { TimeoutExceededOnFetchError } from '@lib/errors/infra/cache/timeout-exceed-on-fetch-error'
 import {
-  EnumGeoCacheScope,
   IGeocodingProvider,
   IGeoCoordinates,
   IGeoSearchOptions,
 } from 'core/contracts/use-cases/providers/geo-provider.interface'
-import { CachedFailureError, ResilientCache, ResilientCacheOptions } from '@lib/infra/cache/resilient-cache'
 
 export class ResilientGeoProvider implements IGeocodingProvider {
-  private readonly cacheManager: ResilientCache
-
-  constructor(
-    private readonly providers: IGeocodingProvider[],
-    redis: Redis,
-    optionsOverride: ResilientCacheOptions,
-  ) {
+  constructor(private readonly providers: IGeocodingProvider[]) {
     if (this.providers.length === 0) {
       throw new NoGeoProviderError()
     }
-
-    this.cacheManager = new ResilientCache(redis, {
-      prefix: optionsOverride.prefix,
-      defaultTtlSeconds: optionsOverride.defaultTtlSeconds,
-      negativeTtlSeconds: optionsOverride.negativeTtlSeconds,
-      maxPendingFetches: optionsOverride.maxPendingFetches,
-      fetchTimeoutMs: optionsOverride.fetchTimeoutMs,
-      ttlJitterPercentage: optionsOverride.ttlJitterPercentage,
-    })
   }
 
   async search(query: string, signal?: AbortSignal): Promise<IGeoCoordinates | null> {
-    const cacheKey = this.cacheManager.generateKey({ _method: EnumGeoCacheScope.SEARCH, q: query })
+    const effectiveSignal = signal ?? new AbortController().signal
 
-    try {
-      return await this.cacheManager.getOrFetch<IGeoCoordinates>(
-        cacheKey,
-        async (effectiveSignal) => {
-          return await this.executeStrategy(
-            (provider, innerSignal) => provider.search(query, innerSignal),
-            effectiveSignal,
-          )
-        },
-        // errorMapper: Cache business errors (coordinates not found)
-        (error) => {
-          if (error instanceof CoordinatesNotFoundError) {
-            return {
-              type: 'CoordinatesNotFoundError',
-              message: error.message,
-              data: { query },
-            }
-          }
-          // System errors (rate limits, network issues) - don't cache
-          return null
-        },
-        signal,
-      )
-    } catch (error) {
-      // Convert CachedFailureError back to domain error
-      if (error instanceof CachedFailureError) {
-        if (error.errorType === 'CoordinatesNotFoundError') {
-          throw new CoordinatesNotFoundError()
-        }
-        // Unexpected cached error type
-        logger.error(
-          { query, cachedError: error },
-          'Tipo de erro em cache inesperado na busca simples por geocodificação',
-        )
-        throw new GeoProviderFailureError()
-      }
-
-      // Re-throw domain and system errors as-is
-      throw error
-    }
+    return await this.executeStrategy(
+      (provider, innerSignal) => provider.search(query, innerSignal),
+      effectiveSignal,
+    )
   }
 
   async searchStructured(options: IGeoSearchOptions, signal?: AbortSignal): Promise<IGeoCoordinates | null> {
-    const cacheKey = this.cacheManager.generateKey({
-      _method: EnumGeoCacheScope.SEARCH_STRUCTURED,
-      ...options,
-    })
+    const effectiveSignal = signal ?? new AbortController().signal
 
-    try {
-      return await this.cacheManager.getOrFetch<IGeoCoordinates>(
-        cacheKey,
-        async (effectiveSignal) => {
-          return await this.executeStrategy(
-            (provider, innerSignal) => provider.searchStructured(options, innerSignal),
-            effectiveSignal,
-          )
-        },
-        // errorMapper: Cache business errors (coordinates not found)
-        (error) => {
-          if (error instanceof CoordinatesNotFoundError) {
-            return {
-              type: 'CoordinatesNotFoundError',
-              message: error.message,
-              data: { options },
-            }
-          }
-          // System errors (rate limits, network issues) - don't cache
-          return null
-        },
-        signal,
-      )
-    } catch (error) {
-      // Convert CachedFailureError back to domain error
-      if (error instanceof CachedFailureError) {
-        if (error.errorType === 'CoordinatesNotFoundError') {
-          throw new CoordinatesNotFoundError()
-        }
-        // Unexpected cached error type
-        logger.error(
-          { options, cachedError: error },
-          'Tipo de erro em cache inesperado na busca estruturada por geocodificação',
-        )
-        throw new GeoProviderFailureError()
-      }
-
-      // Re-throw domain and system errors as-is
-      throw error
-    }
+    return await this.executeStrategy(
+      (provider, innerSignal) => provider.searchStructured(options, innerSignal),
+      effectiveSignal,
+    )
   }
 
   private async executeStrategy(
@@ -193,9 +99,9 @@ export class ResilientGeoProvider implements IGeocodingProvider {
     }
 
     // === DECISION PHASE ===
-    // If we had system errors, throw the last error (won't be cached)
+    // If we had system errors, throw the last error
     if (hasSystemError) {
-      logger.error({ provider: lastProviderName }, 'Geocodificação falhou com erros de sistema (não cacheando)')
+      logger.error({ provider: lastProviderName }, 'Geocodificação falhou com erros de sistema')
 
       if (lastError instanceof GeoServiceBusyError) {
         throw lastError

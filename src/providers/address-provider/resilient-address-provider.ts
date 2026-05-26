@@ -1,84 +1,23 @@
-import { Redis } from 'ioredis'
 import { logger } from '@lib/logger'
 import { InvalidCepError } from '@use-cases/errors/invalid-cep-error'
 import { NoAddressProviderError } from './error/no-address-provider-error'
 import { AddressProviderFailureError } from './error/address-provider-failure-error'
 import { AddressServiceBusyError } from '@use-cases/errors/address-service-busy-error'
 import { TimeoutExceededOnFetchError } from '@lib/errors/infra/cache/timeout-exceed-on-fetch-error'
-import { CachedFailureError, ResilientCache, ResilientCacheOptions } from '@lib/infra/cache/resilient-cache'
 import { IAddressData, IAddressProvider } from 'core/contracts/use-cases/providers/address-provider.interface'
 
-enum AddressCacheScope {
-  CEP = 'cep',
-}
-
 export class ResilientAddressProvider implements IAddressProvider {
-  private readonly cacheManager: ResilientCache
-
-  constructor(
-    private readonly providers: IAddressProvider[],
-    redis: Redis,
-    optionsOverride: ResilientCacheOptions,
-  ) {
+  constructor(private readonly providers: IAddressProvider[]) {
     if (this.providers.length === 0) {
       throw new NoAddressProviderError()
     }
-
-    this.cacheManager = new ResilientCache(redis, {
-      prefix: optionsOverride.prefix,
-      defaultTtlSeconds: optionsOverride.defaultTtlSeconds,
-      negativeTtlSeconds: optionsOverride.negativeTtlSeconds,
-      maxPendingFetches: optionsOverride.maxPendingFetches,
-      fetchTimeoutMs: optionsOverride.fetchTimeoutMs,
-      ttlJitterPercentage: optionsOverride.ttlJitterPercentage,
-    })
   }
 
   async fetchAddress(cep: string, signal?: AbortSignal): Promise<IAddressData | null> {
     const cleanCep = cep.replace(/\D/g, '')
+    const effectiveSignal = signal ?? new AbortController().signal
 
-    const cacheKey = this.cacheManager.generateKey({
-      _scope: AddressCacheScope.CEP,
-      cep: cleanCep,
-    })
-
-    try {
-      return await this.cacheManager.getOrFetch<IAddressData>(
-        cacheKey,
-        async (effectiveSignal) => {
-          return await this.executeStrategy(cleanCep, effectiveSignal)
-        },
-        // errorMapper: Cache business errors (invalid CEP)
-        (error) => {
-          if (error instanceof InvalidCepError) {
-            return {
-              type: 'InvalidCepError',
-              message: error.message,
-              data: { cep: cleanCep },
-            }
-          }
-          // System errors (network, timeouts, rate limits) - don't cache
-          return null
-        },
-        signal,
-      )
-    } catch (error) {
-      // Convert CachedFailureError back to domain error
-      if (error instanceof CachedFailureError) {
-        if (error.errorType === 'InvalidCepError') {
-          throw new InvalidCepError()
-        }
-        // Unexpected cached error type
-        logger.error(
-          { cep: cleanCep, cachedError: error },
-          'Tipo de erro em cache inesperado no ResilientAddressProvider',
-        )
-        throw new AddressProviderFailureError()
-      }
-
-      // Re-throw domain and system errors as-is
-      throw error
-    }
+    return await this.executeStrategy(cleanCep, effectiveSignal)
   }
 
   private async executeStrategy(cep: string, signal: AbortSignal): Promise<IAddressData> {
@@ -143,12 +82,12 @@ export class ResilientAddressProvider implements IAddressProvider {
     }
 
     // === DECISION PHASE ===
-    // Priority 1: If we had system errors, throw the last error (won't be cached)
+    // Priority 1: If we had system errors, throw the last error
     // This ensures we retry when providers are unstable, even if some said "not found"
     if (hasSystemError) {
       logger.error(
         { cep, provider: lastProviderName, notFoundCount },
-        'Provedores de endereço falharam com erros de sistema (não cacheando)',
+        'Provedores de endereço falharam com erros de sistema',
       )
 
       if (lastError instanceof AddressServiceBusyError) {
@@ -163,7 +102,7 @@ export class ResilientAddressProvider implements IAddressProvider {
     if (notFoundCount === this.providers.length) {
       logger.info(
         { cep, notFoundCount, totalProviders: this.providers.length },
-        'TODOS os provedores confirmaram CEP inválido - cacheando como não encontrado',
+        'TODOS os provedores confirmaram CEP inválido',
       )
       throw new InvalidCepError()
     }
